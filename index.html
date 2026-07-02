@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>천하일주 중국편</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700;900&family=Noto+Sans-KR:wght@400;500;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans', 'Noto Sans KR', sans-serif;
+            background-color: #f1f5f9;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 게임 보드와 UI 등 조작이 필요한 요소에만 선택 방지 적용 */
+        .main-layout, .cell, .dice-box, button, .player-status-card, .asset-sidebar {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 입력창은 타이핑이 가능하도록 설정 */
+        input, select {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+            pointer-events: auto !important;
+        }
+
+        .main-layout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+            padding: 10px;
+            box-sizing: border-box;
+            background: radial-gradient(circle, #ffffff 0%, #cbd5e1 100%);
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        .asset-sidebar {
+            width: 220px; 
+            min-width: 220px;
+            height: 96vh;
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: 24px;
+            padding: 14px;
+            display: none; 
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.06);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            flex-shrink: 0;
+            -ms-overflow-style: none; 
+            scrollbar-width: none; 
+        }
+        .asset-sidebar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .game-active .asset-sidebar {
+            display: flex !important;
+        }
+
+        .board-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            width: 100%;
+            min-width: 0; 
+        }
+
+        .board-aspect-ratio-box {
+            position: relative;
+            height: min(94vh, calc((100vw - 500px) * 10 / 12));
+            aspect-ratio: 12 / 10;
+            width: auto;
+            margin: 0 auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .board-container {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            gap: 1px;
+            width: 100%;
+            height: 100%;
+            background-color: #1e293b;
+            border: 6px solid #0f172a;
+            position: relative;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            border-radius: 8px;
+            z-index: 10;
+        }
+
+        .cell {
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; 
+            position: relative;
+            border: 1px solid #f1f5f9;
+            padding: 2px;
+            overflow: hidden;
+            min-width: 0; 
+            min-height: 0; 
+            box-sizing: border-box;
+        }
+        .cell-selectable { cursor: pointer; background-color: #dcfce7 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+        .cell-title { 
+            font-weight: 900; 
+            text-align: center; 
+            line-height: 1.1; 
+            color: #0f172a; 
+            z-index: 5; 
+            width: 100%; 
+            overflow: hidden;
+            word-break: break-all; 
+            font-size: clamp(0.58rem, 1.35vmin, 0.9rem); 
+            letter-spacing: -0.05em; 
+        }
+        .cell-price { 
+            color: #ef4444; 
+            font-weight: 900; 
+            line-height: 1; 
+            margin-top: 2px; 
+            width: 100%;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: clamp(0.48rem, 1.15vmin, 0.75rem);
+        }
+        .cell-emoji { 
+            font-size: clamp(1rem, 2.35vmin, 1.8rem); 
+            line-height: 1; 
+            margin-bottom: 1px; 
+        }
+        .cell-label { 
+            font-weight: 900; 
+            line-height: 1.1; 
+            margin-bottom: 1px; 
+            text-align: center; 
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: clamp(0.44rem, 1.0vmin, 0.68rem);
+        }
+        
+        .cell-owner { 
+            position: absolute; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 6px; 
+            z-index: 10; 
+            transition: background-color 0.3s ease; 
+        }
+
+        .center-area-fixed {
+            position: absolute;
+            top: 10%; left: 8.333%; width: 83.333%; height: 80%;
+            background-color: #10b981; 
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            padding: clamp(10px, 1.8vmin, 18px) clamp(6px, 1.2vmin, 15px) clamp(12px, 2.2vmin, 24px) clamp(6px, 1.2vmin, 15px); 
+            gap: clamp(4px, 0.8vmin, 8px);
+            z-index: 20;
+            background-image: linear-gradient(145deg, #10b981 0%, #059669 100%);
+            border-radius: 4px;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        .dice-box {
+            width: clamp(75px, 11vmin, 120px); 
+            height: clamp(75px, 11vmin, 120px); 
+            background: white; border-radius: clamp(10px, 1.8vmin, 20px);
+            display: flex; align-items: center; justify-content: center;
+            font-size: clamp(2.8rem, 7.5vmin, 5.2rem); cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.22);
+            border: 4px solid #f1f5f9;
+            transition: transform 0.15s ease;
+            outline: none;
+        }
+        .dice-box:hover {
+            transform: scale(1.05);
+        }
+        .dice-rolling { animation: roll-anim 0.1s infinite; }
+        @keyframes roll-anim { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(10deg) scale(1.05); } 100% { transform: rotate(-10deg); } }
+
+        .log-container {
+            width: 100%; 
+            min-height: 70px;
+            height: clamp(80px, 16vmin, 140px); 
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.85); border-radius: 12px;
+            padding: 10px; font-size: 0.85rem; color: #ffffff;
+            text-align: left; border: 1px solid rgba(255,255,255,0.1);
+            box-sizing: border-box;
+            line-height: 1.4;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .move-path {
+            color: #7DD3FC; 
+            font-weight: bold;
+        }
+
+        .player-status-card {
+            background: white; 
+            padding: clamp(8px, 1.8vmin, 16px) clamp(6px, 1.1vmin, 14px);
+            border-radius: clamp(6px, 1.2vmin, 12px);
+            text-align: center; 
+            flex: 1;
+            min-width: 0; 
+            border-bottom: clamp(2px, 0.4vmin, 4px) solid transparent;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.05);
+            margin: 0; 
+            flex-shrink: 1; 
+            box-sizing: border-box;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .player-active { transform: scale(1.05); box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
+
+        .popup-overlay {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+        .modal-card {
+            background: white; padding: 1.8rem; border-radius: 2rem;
+            max-width: 500px; width: 92%; box-shadow: 0 50px 100px rgba(0,0,0,0.5);
+            border-top: 15px solid;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .player-token { 
+            width: 22px; height: 22px; border-radius: 50%; position: absolute; z-index: 1000; 
+            transition: left 0.3s ease-out, top 0.3s ease-out; 
+            border: 2px solid white; box-shadow: 0 3px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 900; 
+        }
+        .screen-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.98); }
+    </style>
+</head>
+<body>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="screen-overlay" onclick="window.initBGM()">
+        <div class="bg-white p-10 rounded-[50px] max-w-md w-full shadow-2xl text-center relative" onclick="event.stopPropagation(); window.initBGM();">
+            <h1 class="text-4xl md:text-5xl font-black mb-6 text-red-600 tracking-tighter whitespace-nowrap">Let's go~ China!</h1>
+            
+            <div class="mb-6">
+                <label class="block text-xs font-black text-gray-400 mb-2 uppercase">참여자 인원</label>
+                <select id="player-count" class="w-full p-4 border-2 border-slate-100 rounded-3xl font-black text-center text-xl outline-none focus:border-red-600 transition-all cursor-pointer" onchange="window.updatePlayerInputs(); window.initBGM();">
+                    <option value="2">2 Players</option>
+                    <option value="3">3 Players</option>
+                    <option value="4">4 Players</option>
+                </select>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-3xl mb-8 border border-slate-100">
+                <p class="text-xs text-gray-400 font-bold mb-4 uppercase tracking-widest">여행자 설정</p>
+                <div id="player-names-setup" class="space-y-3"></div>
+            </div>
+
+            <button onclick="window.showIntro()" class="w-full bg-red-600 text-white py-5 rounded-[30px] font-black text-2xl hover:bg-red-700 transition-all shadow-xl shadow-red-100">여행 준비 완료</button>
+            
+            <div class="text-[10px] text-slate-400 font-black tracking-widest mt-4 text-right">
+                Created by xiaolin &copy; 2026
+            </div>
+        </div>
+    </div>
+
+    <!-- Intro Guide -->
+    <div id="intro-overlay" class="screen-overlay hidden">
+        <div class="max-w-3xl text-center text-white px-6 w-full">
+            <h2 class="text-4xl font-black mb-10 text-yellow-400 italic">🇨🇳 TRAVEL GUIDE</h2>
+            <div class="space-y-6 text-left bg-white/10 p-8 rounded-[40px] backdrop-blur-md border border-white/20 mb-10 font-bold leading-relaxed text-lg">
+                <p>1. 🚩 <span class="text-yellow-300">출발지</span>를 지날 때마다 여비 <span class="text-emerald-400">20만 위안</span>을 수령합니다.</p>
+                <p>2. 🏙️ <span class="text-yellow-300">한 바퀴 완주</span> 후부터 빈 도시를 소유할 수 있습니다.</p>
+                <p>3. 🏨 <span class="text-blue-300">내 도시</span>에 다시 오면 호텔을 건설해 수익을 높이세요.</p>
+                <p>4. 💸 <span class="text-rose-400">남의 땅</span>에서는 통행세를 내야 하니 조심하세요!</p>
+                <p>5. ✈️ <span class="text-purple-300">전용기</span> 도착 시 다음 턴 어디든 비행 가능합니다.</p>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-4">
+                <button onclick="window.launchGame()" class="flex-1 bg-blue-600 py-6 rounded-full font-black text-2xl md:text-3xl shadow-xl hover:bg-blue-700 transition-all border-b-4 border-blue-800">중국 대륙으로 출발! 🚀</button>
+                <button onclick="window.showLandInfo(0)" class="flex-1 bg-emerald-600 py-6 rounded-full font-black text-2xl md:text-3xl shadow-xl hover:bg-emerald-700 transition-all border-b-4 border-emerald-800">토지 설명카드 📖</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 토지 설명카드 전용 오버레이 -->
+    <div id="land-info-overlay" class="screen-overlay hidden" style="z-index: 2500;">
+        <div class="bg-slate-50 p-6 md:p-8 rounded-[40px] w-[95%] max-w-5xl max-h-[90vh] flex flex-col shadow-2xl relative">
+            <div class="flex justify-between items-center mb-4">
+                <button onclick="window.backToSetupFromInfo()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-xl transition-all shadow-sm">🔙 첫 화면으로</button>
+                <h2 class="text-2xl md:text-3xl font-black text-slate-800 text-center flex-1">🇨🇳 중국 행정구역 안내</h2>
+                <button onclick="window.closeLandInfo()" class="bg-rose-100 hover:bg-rose-200 text-rose-600 font-bold py-2 px-4 rounded-xl transition-all shadow-sm">✖ 닫기</button>
+            </div>
+            
+            <div id="land-info-pagination" class="flex justify-center items-center gap-4 mb-6"></div>
+            
+            <div id="land-info-content" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pr-2 pb-4"></div>
+        </div>
+    </div>
+
+    <!-- Main Game UI -->
+    <div class="main-layout" id="main-layout-container">
+        <!-- 왼쪽 사이드바 -->
+        <div id="left-sidebar" class="asset-sidebar">
+            <div id="game-timer" class="bg-slate-900 text-emerald-400 p-4 rounded-xl text-center text-xl font-black mb-4 uppercase tracking-widest shadow-inner border border-slate-700">
+                ⏱️ 00:00
+            </div>
+            
+            <div id="p1-assets" class="mb-4">
+                <div id="p1-assets-header" class="text-[0.68rem] font-black p-2 rounded-t-lg text-white" style="background:#ef4444">Player 1</div>
+                <div class="bg-white p-2 border border-t-0 rounded-b-lg grid grid-cols-2 gap-2 shadow-inner min-h-[100px]" id="p1-asset-list"></div>
+            </div>
+            <div id="p3-assets" class="hidden mb-4">
+                <div id="p3-assets-header" class="text-[0.68rem] font-black p-2 rounded-t-lg text-white" style="background:#10b981">Player 3</div>
+                <div class="bg-white p-2 border border-t-0 rounded-b-lg grid grid-cols-2 gap-2 shadow-inner min-h-[100px]" id="p3-asset-list"></div>
+            </div>
+        </div>
+
+        <div class="board-wrapper">
+            <div class="board-aspect-ratio-box">
+                <div id="board" class="board-container"></div>
+                
+                <div class="center-area-fixed hidden" id="game-center-ui">
+                    <div class="flex-grow"></div>
+                    
+                    <div class="flex flex-col items-center mb-4">
+                        <div class="transform -rotate-6 px-4 py-1 bg-red-600 border-4 border-white rounded-xl shadow-[4px_4px_0px_rgba(0,0,0,0.2)] text-2xl font-black text-white italic tracking-widest mb-2" 
+                             style="text-shadow: 2px 2px 0px #7f1d1d, 0 0 10px rgba(255,255,255,0.5);">
+                            LET'S GO!
+                        </div>
+                        <div class="text-5xl md:text-7xl font-black text-yellow-300 tracking-tight" 
+                             style="text-shadow: 4px 4px 0px #064e3b, -2px -2px 0 #064e3b, 2px -2px 0 #064e3b, -2px 2px 0 #064e3b, -2px 2px 0 #064e3b, 0px 8px 20px rgba(0,0,0,0.6);">
+                            천하일주 중국편
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4 md:gap-8 bg-white/95 p-3 md:p-5 rounded-[24px] md:rounded-[35px] shadow-2xl border border-white/50 z-50 max-w-full box-border">
+                        <div class="text-center">
+                            <div class="text-[0.55rem] font-black text-gray-400 uppercase tracking-widest mb-1">Current Turn</div>
+                            <div id="current-player-name" class="text-xl font-black text-slate-800">준비 중</div>
+                        </div>
+                        <div id="dice" class="dice-box" onclick="window.handleRollDice()">🎲</div>
+                        <div id="airplane-info" class="hidden absolute top-[-50px] left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full font-black animate-bounce shadow-xl">목적지 클릭! ✈️</div>
+                    </div>
+                    <div id="player-status-container" class="flex gap-2.5 md:gap-3.5 w-[90%] justify-center px-1 box-border"></div>
+                    <div id="game-log" class="log-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 오른쪽 사이드바 -->
+        <div id="right-sidebar" class="asset-sidebar">
+            <div class="mb-4">
+                <button onclick="window.endGameManual()" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-xs md:text-sm flex items-center justify-center gap-1 hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 shadow-sm">
+                    <span class="text-sm">⏹</span> 게임 종료
+                </button>
+            </div>
+            <div id="p2-assets" class="mb-4">
+                <div id="p2-assets-header" class="text-[0.68rem] font-black p-2 rounded-t-lg text-white" style="background:#3b82f6">Player 2</div>
+                <div class="bg-white p-2 border border-t-0 rounded-b-lg grid grid-cols-2 gap-2 shadow-inner min-h-[100px]" id="p2-asset-list"></div>
+            </div>
+            <div id="p4-assets" class="hidden mb-4">
+                <div id="p4-assets-header" class="text-[0.68rem] font-black p-2 rounded-t-lg text-white" style="background:#f59e0b">Player 4</div>
+                <div class="bg-white p-2 border border-t-0 rounded-b-lg grid grid-cols-2 gap-2 shadow-inner min-h-[100px]" id="p4-asset-list"></div>
+            </div>
+        </div>
+
+        <div class="fixed bottom-2 left-1/2 -translate-x-1/2 text-[0.65rem] md:text-xs text-slate-400 font-bold tracking-widest z-50 pointer-events-none">
+            Created by xiaolin &copy; 2026
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="popup-overlay" class="popup-overlay">
+        <div id="popup-content" class="modal-card"></div>
+    </div>
+
+    <script>
+        const PLAYER_COLORS = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"];
+        const DICE_EMOJIS = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+        
+        const BOARD_DATA = [
+            { id: 0, name: "출발", type: "start", emoji: "🚩", r: 10, c: 12, desc: "중국의 수도이자 정치, 문화의 중심지 베이징입니다. 명·청 시대의 황궁인 자금성과 만리장성 등 세계적인 문화유산이 자리하고 있으며, 대표적인 요리로 베이징 카오야(북경오리)가 있습니다." },
+            { id: 1, name: "신장", price: 10, hotel: 20, stay: 15, color: "#d8b4fe", type: "city", label: "자치구", hanzi: "新疆", pinyin: "Xīnjiāng", r: 10, c: 11, desc: "중국 서북부에 위치한 광활한 자치구로, 실크로드의 역사와 위구르족 특유의 문화가 숨 쉬는 곳입니다. 톈산산맥과 타클라마칸 사막의 장엄한 자연경관을 자랑하며, 양꼬치와 난(Naan) 같은 전통 미식이 유명합니다." },
+            { id: 2, name: "허베이성", price: 12, hotel: 24, stay: 18, color: "#fee2e2", type: "city", label: "성", hanzi: "河北省", pinyin: "Héběi Shěng", r: 10, c: 10, desc: "수도 베이징을 둘러싸고 있는 지역으로, 청나라 황실의 여름 피서지였던 청더 피서산장과 만리장성의 동쪽 끝 관문인 산하이관(산해관)이 위치해 있습니다. 역사적인 군사 요충지이자 풍부한 평야 지대입니다." },
+            { id: 3, name: "산시(山西)성", price: 14, hotel: 28, stay: 21, color: "#fee2e2", type: "city", label: "성", hanzi: "山西省", pinyin: "Shānxī Shěng", r: 10, c: 9, desc: "중국 고대 건축 박물관이라 불리며, 명청 시대 상업의 중심지였던 핑야오 고성이 완벽하게 보존되어 있습니다. 밀가루 반죽을 칼로 깎아 만드는 전통 면 요리인 도삭면의 본고장입니다." },
+            { id: 4, name: "홍콩", type: "bonus", emoji: "🎰", hanzi: "香港", pinyin: "Xiānggǎng", r: 10, c: 8, desc: "동양과 서양의 문화가 교차하는 국제적인 금융 및 무역 중심지입니다. 빅토리아 피크에서 바라보는 화려한 야경이 세계적으로 유명하며, 다채로운 딤섬과 융합 다이닝 등 미식 문화가 고도로 발달했습니다." },
+            { id: 5, name: "랴오닝성", price: 16, hotel: 32, stay: 24, color: "#fef08a", type: "city", label: "성", hanzi: "辽宁省", pinyin: "Liáoníng Shěng", r: 10, c: 7, desc: "중국 동북 3성의 관문으로, 고구려와 발해의 역사적 자취가 남아있는 지역입니다. 해안 도시 다롄의 이국적인 풍경과 선양 고궁의 웅장함을 동시에 만끽할 수 있는 경제적, 문화적 요충지입니다." },
+            { id: 6, name: "황금열쇠", type: "bonus", emoji: "🔑", r: 10, c: 6, desc: "대륙의 기운이 가득 잠겨 있는 신비로운 황금열쇠 상자가 모습을 드러냈습니다! 어떠한 기적의 특별 보상이나 안내 혜택이 여러분을 도울지 확인해보세요." },
+            { id: 7, name: "톈진", price: 40, hotel: 80, stay: 80, color: "#000000", type: "muni", label: "직할시", hanzi: "天津", pinyin: "Tiānjīn", r: 10, c: 5, desc: "중국 북부의 대표적인 무역 항구이자 직할시입니다. 이탈리아 풍경구 등 근대 개항기 조계지 시대의 서양식 건축물이 잘 보존되어 있으며, 톈진 아이(관람차)의 야경과 육즙이 풍부한 구불리 빠오즈(만두)가 대표적입니다." },
+            { id: 8, name: "헤이룽장성", price: 20, hotel: 40, stay: 30, color: "#fef9c3", type: "city", label: "성", hanzi: "黑龙江省", pinyin: "Hēilóngjiāng Shěng", r: 10, c: 4, desc: "중국 최북단에 위치하여 러시아와 국경을 맞닿고 있는 지역입니다. 매년 환상적인 하얼빈 국제 빙등 축제가 열리며, 비잔틴 양식의 성 소피아 성당과 꿔바로우(꿔바러우) 요리의 발상지로 유명합니다." },
+            { id: 9, name: "네이멍구", price: 22, hotel: 44, stay: 33, color: "#d8b4fe", type: "city", label: "자치구", hanzi: "内蒙古", pinyin: "Nèiměnggǔ", r: 10, c: 3, desc: "끝없이 펼쳐진 훌룬부이르 대초원과 바다인자란 사막 등 광활한 자연을 품고 있는 자치구입니다. 유목 민족의 전통 가옥인 게르 체험과 신선한 양고기 구이, 수테차(전통 밀크티)가 대표적인 문화입니다." },
+            { id: 10, name: "지린성", price: 18, hotel: 36, stay: 27, color: "#fef9c3", type: "city", label: "성", hanzi: "吉林省", pinyin: "Jílín Shěng", r: 10, c: 2, desc: "한반도와 국경을 접하고 있는 동북부 지역으로, 민족의 영산인 백두산(창바이산) 천지와 고구려 국내성 유적(지안)이 위치해 있습니다. 인삼, 녹용 등 귀한 약재와 산림 자원이 풍부합니다." },
+            { id: 11, name: "무인도", type: "jail", emoji: "🏝️", r: 10, c: 1, desc: "황량하고 끝없는 모래 폭풍이 몰아치는 사막 오아시스 속 미지의 격리 지대입니다. 이곳에 낙오되면 다음 차례인 단 1턴 동안 주사위를 던질 수 없으며 행동 불능 상태로 쉬어가야 합니다." },
+            { id: 12, name: "저장성", price: 26, hotel: 52, stay: 39, color: "#bbf7d0", type: "city", label: "성", hanzi: "浙江省", pinyin: "Zhèjiāng Shěng", r: 9, c: 1, desc: "하늘에는 천당, 땅에는 항저우와 쑤저우가 있다는 말이 있을 정도로 풍요로운 강남 지역입니다. 항저우 서호의 수려한 경관과 함께 최고급 녹차인 서호 용정차의 발상지이며, 동파육의 고향이기도 합니다." },
+            { id: 13, name: "안후이성", price: 24, hotel: 48, stay: 36, color: "#ccfbf1", type: "city", label: "성", hanzi: "安徽省", pinyin: "Ānhuī Shěng", r: 8, c: 1, desc: "수묵화 같은 풍경을 자랑하는 기암괴석과 운해의 명산, 황산이 위치한 지역입니다. 특유의 흰 벽과 검은 기와를 얹은 휘파 건축 양식의 고촌락(홍춘)이 유명하며, 깊은 맛의 후이저우 요리가 발달했습니다." },
+            { id: 14, name: "장쑤성", price: 28, hotel: 56, stay: 42, color: "#bbf7d0", type: "city", label: "성", hanzi: "江苏省", pinyin: "Jiāngsū Shěng", r: 7, c: 1, desc: "양쯔강 하류의 비옥한 삼각주에 위치하여 수로가 발달한 수향 지역입니다. 쑤저우의 졸정원 등 유네스코에 등재된 정교한 전통 정원들이 즐비하며, 달콤하고 부드러운 민물고기 요리가 유명합니다." },
+            { id: 15, name: "마카오", type: "bonus", emoji: "💎", hanzi: "澳门", pinyin: "Àomén", r: 6, c: 1, desc: "동서양의 문화가 융합된 화려한 관광 도시로, 성 바울 성당의 유적 등 포르투갈 양식의 세계문화유산이 돋보입니다. 초현대식 호텔들의 야경과 함께 에그타르트, 매캐니즈 요리 등 독특한 미식을 즐길 수 있습니다." },
+            { id: 16, name: "상하이", price: 45, hotel: 90, stay: 75, color: "#000000", type: "muni", label: "직할시", hanzi: "上海", pinyin: "Shànghǎi", r: 5, c: 1, desc: "황푸강을 사이에 두고 와이탄의 근대 유럽식 건축물과 푸둥의 미래지향적 마천루가 대비를 이루는 최대 경제 도시입니다. 상하이 임시정부 유적지가 있으며, 샤오롱바오(소롱포)의 본고장입니다." },
+            { id: 17, name: "장시성", price: 22, hotel: 44, stay: 33, color: "#ccfbf1", type: "city", label: "성", hanzi: "江西省", pinyin: "Jiāngxī Shěng", r: 4, c: 1, desc: "천 년이 넘는 세월 동안 중국 황실에 바쳐지던 청화백자의 생산지 경덕진이 있는 역사적인 도자기의 성지입니다. 이백의 시에 등장하는 루산 폭포의 장관이 유명하며, 매콤한 장시 요리가 특징입니다." },
+            { id: 18, name: "허난성", price: 24, hotel: 48, stay: 36, color: "#dbeafe", type: "city", label: "성", hanzi: "河南省", pinyin: "Hénán Shěng", r: 3, c: 1, desc: "황하 문명이 태동한 중원 지역으로, 중국 무술의 산실인 쑹산 소림사와 절벽에 수만 개의 불상을 새긴 뤄양 룽먼석굴(용문석굴)이 자리하고 있습니다. 중국 역사상 많은 고대 왕조의 도읍이었던 문화의 중심지입니다." },
+            { id: 19, name: "산둥성", price: 26, hotel: 52, stay: 42, color: "#dbeafe", type: "city", label: "성", hanzi: "山东省", pinyin: "Shāndōng Shěng", r: 2, c: 1, desc: "춘추전국시대 노나라의 영토이자 공자와 맹자가 태어난 유교 사상의 발상지입니다. 중국 오악 중 으뜸인 타이산(태산)이 있으며, 해안 도시 칭다오의 유럽풍 풍경과 칭다오 맥주, 바지락 요리가 유명합니다." },
+            { id: 20, name: "전용기", price: 30, type: "airplane", emoji: "✈️", r: 1, c: 1, desc: "중국 대륙 전역을 자유롭고 빠르게 무제한 횡단 비행할 수 있는 정교한 대륙 전용기 관문입니다." },
+            { id: 21, name: "후베이성", price: 28, hotel: 56, stay: 42, color: "#e0e7ff", type: "city", label: "성", hanzi: "湖北省", pinyin: "Húběi Shěng", r: 1, c: 2, desc: "양쯔강의 거대한 물줄기가 관통하는 교통의 요지이자 삼국지 주요 전투인 적벽대전의 무대입니다. 우한의 랜드마크인 황학루에서 바라보는 강변 풍경이 수려하며, 민물고기 요리와 러간몐(열건면)이 대표적입니다." },
+            { id: 22, name: "후난성", price: 28, hotel: 56, stay: 42, color: "#e0e7ff", type: "city", label: "성", hanzi: "湖南省", pinyin: "Húnán Shěng", r: 1, c: 3, desc: "영화 아바타의 모티브가 된 기암괴석의 일대 장자제(장가계)의 경이로운 자연경관을 품은 지역입니다. 마오쩌둥의 고향으로도 알려져 있으며, 붉은 고추를 듬뿍 사용하여 강렬한 매운맛을 내는 샹차이(후난 요리)가 유명합니다." },
+            { id: 23, name: "광둥성", price: 32, hotel: 64, stay: 48, color: "#e0e7ff", type: "city", label: "성", hanzi: "广东省", pinyin: "Guǎngdōng Shěng", r: 1, c: 4, desc: "예로부터 해상 실크로드의 출발점이자 대외 무역이 가장 활발했던 경제 거점입니다. 수백 가지에 달하는 딤섬과 얌차(차를 마시는 문화)로 대표되는 광둥 요리는 세계적으로 가장 널리 알려진 중국 요리입니다." },
+            { id: 24, name: "하이난성", price: 30, hotel: 60, stay: 45, color: "#f3e8ff", type: "city", label: "성", hanzi: "海南省", pinyin: "Hǎinán Shěng", r: 1, c: 5, desc: "동양의 하와이라 불리는 중국 최남단의 열대 섬으로, 맑은 바다와 야자수가 어우러진 최고의 휴양지입니다. 일년 내내 온화한 기후를 자랑하며, 신선한 해산물 요리와 하이난 닭고기 덮밥(원창지)이 유명합니다." },
+            { id: 25, name: "황금열쇠", type: "bonus", emoji: "🔑", r: 1, c: 6, desc: "황금열쇠 찬스입니다! 대륙의 기운이 담긴 특별 혜택을 누릴 수 있습니다." },
+            { id: 26, name: "광시", price: 24, hotel: 48, stay: 36, color: "#d8b4fe", type: "city", label: "자치구", hanzi: "广西", pinyin: "Guǎngxī", r: 1, c: 7, desc: "구이린(계림)의 산수는 천하제일이라는 찬사를 받는 수려한 카르스트 지형과 리강의 풍경이 그려내는 산수화 같은 자치구입니다. 중국 화폐 20위안의 배경지이기도 하며, 독특한 향의 뤄쓰펀(우렁이 쌀국수)이 명물입니다." },
+            { id: 27, name: "구이저우성", price: 22, hotel: 44, stay: 33, color: "#fce7f3", type: "city", label: "성", hanzi: "贵州省", pinyin: "Guìzhōu Shěng", r: 1, c: 8, desc: "아시아 최대 규모인 황궈수 폭포가 웅장하게 쏟아지는 산악 지대입니다. 먀오족, 둥족 등 다양한 소수민족의 독특한 은장식 문화와 다랑이논 풍경이 보존되어 있으며, 중국 최고의 명주인 마오타이주의 고향입니다." },
+            { id: 28, name: "윈난성", price: 24, hotel: 48, stay: 36, color: "#fce7f3", type: "city", label: "성", hanzi: "云南省", pinyin: "Yúnnán Shěng", r: 1, c: 9, desc: "사계절 봄 같은 날씨의 쿤밍, 옥룡설산이 있는 리장 고성 등 다채로운 자연과 문화가 공존하는 고원 지역입니다. 차마고도의 출발점이자 보이차의 발원지이며, 다양한 버섯 요리와 궈차오미셴(운남 쌀국수)이 유명합니다." },
+            { id: 29, name: "쓰촨성", price: 30, hotel: 60, stay: 45, color: "#fce7f3", type: "city", label: "성", hanzi: "四川省", pinyin: "Sìchuān Shěng", r: 1, c: 10, desc: "세계문화유산인 주자이거우(구채구)의 영롱한 오색 호수와 국보급 동물인 자이언트 판다의 서식지로 유명한 서부의 비옥한 분지입니다. 화자오(초피)를 사용하여 얼얼하고 매운맛을 내는 마파두부와 마라훠궈의 발상지입니다." },
+            { id: 30, name: "충칭", price: 40, hotel: 80, stay: 65, color: "#000000", type: "muni", label: "직할시", hanzi: "重庆", pinyin: "Chóngqìng", r: 1, c: 11, desc: "양쯔강과 자링강이 만나는 가파른 절벽 위에 세워진 산의 도시이자 직할시입니다. 건물 사이를 관통하는 모노레일과 홍야둥의 화려한 야경 등 입체적인 도시 경관을 자랑하며, 정통 중칭 마라훠궈가 매우 유명합니다." },
+            { id: 31, name: "퀴즈", type: "quiz", emoji: "❓", r: 1, c: 12, desc: "중국 대륙 전문가 퀴즈 타임! 문제를 정확하게 맞히면 문화 포상 여비를 두둑이 챙깁니다." },
+            { id: 32, name: "산시(陝西)성", price: 28, hotel: 56, stay: 42, color: "#f8fafc", type: "city", label: "성", hanzi: "陕西省", pinyin: "Shǎnxī Shěng", r: 2, c: 12, desc: "중국 역사상 13개 왕조의 도읍이었던 시안(장안)이 있는 문명의 중심지입니다. 진시황릉을 호위하는 거대한 병마용갱과 양귀비의 화청지 등 압도적인 역사 유적이 가득하며, 파오모(고기 수프에 빵을 적셔 먹는 요리)가 대표 미식입니다." },
+            { id: 33, name: "간쑤성", price: 26, hotel: 52, stay: 39, color: "#fef3c7", type: "city", label: "성", hanzi: "甘肃省", pinyin: "Gānsù Shěng", r: 3, c: 12, desc: "고대 실크로드의 핵심 통로로, 사막 한가운데 자리한 불교 예술의 보고 둔황 막고굴과 오아시스인 월아천이 위치해 있습니다. 무지개 빛깔의 지층이 경이로운 장예 단샤 지질공원(칠채산)의 풍광과 란저우 우육면이 유명합니다." },
+            { id: 34, name: "닝샤", price: 22, hotel: 44, stay: 33, color: "#d8b4fe", type: "city", label: "자치구", hanzi: "宁夏", pinyin: "Níngxià", r: 4, c: 12, desc: "황하의 은혜를 받아 사막 속의 오아시스로 불리는 비옥한 회족 자치구입니다. 신비로운 고대 서하 왕국의 피라미드 무덤군 등 독특한 역사 유적이 남아 있으며, 중국 최고의 품질을 자랑하는 붉은 구기자와 양고기 요리를 즐길 수 있습니다." },
+            { id: 35, name: "황금열쇠", type: "bonus", emoji: "🔑", r: 5, c: 12, desc: "황금열쇠 찬스입니다! 대륙의 기운이 담긴 특별 혜택을 누릴 수 있습니다." },
+            { id: 36, name: "칭하이성", price: 24, hotel: 48, stay: 36, color: "#fef3c7", type: "city", label: "성", hanzi: "青海省", pinyin: "Qīnghǎi Shěng", r: 6, c: 12, desc: "해발 3,000m 이상의 칭짱 고원 북동부에 위치하며, 하늘을 거울처럼 비추는 중국 최대의 소금 호수 칭하이호가 있는 맑고 신비로운 지역입니다. 장족과 티베트 불교 문화가 융합되어 있으며 유목 민족의 야크 고기 요리를 즐길 수 있습니다." },
+            { id: 37, name: "시짱", price: 20, hotel: 40, stay: 30, color: "#d8b4fe", type: "city", label: "자치구", hanzi: "西藏", pinyin: "Xīzàng", r: 7, c: 12, desc: "세계의 지붕이라 불리는 티베트 자치구로, 평균 해발 4,000m 이상의 웅장한 히말라야 산맥을 품고 있습니다. 라싸에 우뚝 솟은 티베트 불교의 성지 포탈라궁이 있으며, 고산 지대의 주식인 짬빠와 수유차를 먹는 문화가 있습니다." },
+            { id: 38, name: "푸젠성", price: 25, hotel: 50, stay: 38, color: "#ccfbf1", type: "city", label: "성", hanzi: "福建省", pinyin: "Fújiàn Shěng", r: 8, c: 12, desc: "수백 명이 함께 생활할 수 있도록 흙으로 둥글게 지은 고대 방어형 전통 가옥 투루(토루)가 유네스코 세계문화유산으로 지정된 해안 지역입니다. 중국을 대표하는 명품 우롱차인 대홍포와 철관음의 산지이자 차 문화가 고도로 발달한 곳입니다." },
+            { id: 39, name: "베이징", price: 50, hotel: 100, stay: 85, color: "#000000", type: "muni", label: "직할시", hanzi: "北京", pinyin: "Běijīng", r: 9, c: 12, desc: "중국의 수도이자 정치, 문화의 중심지입니다. 명·청 시대의 황궁인 자금성과 만리장성 등 세계적인 문화유산이 자리하고 있으며, 대표적인 요리로 베이징 카오야(북경오리)가 있습니다." }
+        ];
+
+        let LAND_PAGES = [];
+        let currentLandPage = 0;
+
+        function initLandPages() {
+            if (LAND_PAGES.length > 0) return;
+            
+            const targetOrder = ["베이징", "상하이", "톈진", "충칭", "홍콩", "마카오"];
+            const muniAndSar = [];
+            targetOrder.forEach(name => {
+                const found = BOARD_DATA.find(d => d.name === name);
+                if (found) muniAndSar.push(found);
+            });
+
+            const autonomous = BOARD_DATA.filter(d => d.label === '자치구');
+            const provinces = BOARD_DATA.filter(d => d.label === '성');
+
+            LAND_PAGES.push({ title: "직할시 및 특별행정구", data: muniAndSar });
+            LAND_PAGES.push({ title: "자치구", data: autonomous });
+            
+            for (let i = 0; i < provinces.length; i += 6) {
+                LAND_PAGES.push({ title: `성 (${Math.floor(i/6) + 1})`, data: provinces.slice(i, i + 6) });
+            }
+        }
+
+        let players = [];
+        let currentPlayerIdx = 0;
+        let isRolling = false;
+        let isGameOver = false;
+        let airplaneMode = false;
+        let audioCtx = null;
+        
+        let gameStartTime = null;
+        let timerInterval = null;
+
+        let liquidationState = { player: null, needed: 0, callback: null };
+        
+        let bgmTimeout = null;
+        let isBgmPlaying = false;
+        let allowBgm = true;
+
+        function playSound(type) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const now = audioCtx.currentTime;
+                if (type === 'dice') { 
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.type = 'square'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(40, now + 0.1); gain.gain.setValueAtTime(0.08, now); gain.gain.linearRampToValueAtTime(0, now + 0.1); osc.start(now); osc.stop(now + 0.1); 
+                }
+                else if (type === 'move') { 
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(450, now); osc.frequency.exponentialRampToValueAtTime(900, now + 0.05); gain.gain.setValueAtTime(0.04, now); gain.gain.linearRampToValueAtTime(0, now + 0.05); osc.start(now); osc.stop(now + 0.05); 
+                }
+                else if (type === 'money') { 
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(880, now); osc.frequency.setValueAtTime(1320, now + 0.1); gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.3); osc.start(now + 0.3); 
+                }
+                else if (type === 'land') { 
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(120, now); gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.2); osc.start(now); osc.stop(now + 0.2); 
+                }
+                else if (type === 'applause') {
+                    const freqs = [523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50];
+                    freqs.forEach((freq, i) => {
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
+                        osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, now + i * 0.07); gain.gain.setValueAtTime(0.08, now + i * 0.07); gain.gain.linearRampToValueAtTime(0, now + i * 0.07 + 0.1); osc.start(now + i * 0.07); osc.stop(now + i * 0.07 + 0.12);
+                    });
+                }
+                else if (type === 'mock') {
+                    const gaps = [0, 0.3, 0.6];
+                    const startNotes = [330, 294, 261];
+                    gaps.forEach((gap, i) => {
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
+                        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(startNotes[i], now + gap); osc.frequency.linearRampToValueAtTime(startNotes[i] - 90, now + gap + 0.25); gain.gain.setValueAtTime(0.08, now + gap); gain.gain.linearRampToValueAtTime(0, now + gap + 0.25); osc.start(now + gap); osc.stop(now + gap + 0.27);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function playRetroBGM() {
+            if (!isBgmPlaying || !audioCtx) return;
+            const melody = [
+                [659.25, 0.4], [493.88, 0.2], [523.25, 0.2], [587.33, 0.4], [523.25, 0.2], [493.88, 0.2],
+                [440.00, 0.4], [440.00, 0.2], [523.25, 0.2], [659.25, 0.4], [587.33, 0.2], [523.25, 0.2],
+                [493.88, 0.6], [523.25, 0.2], [587.33, 0.4], [659.25, 0.4], [523.25, 0.4], [440.00, 0.4], 
+                [440.00, 0.8]
+            ];
+            let time = audioCtx.currentTime;
+            melody.forEach(note => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.value = note[0];
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.04, time + 0.02); 
+                gain.gain.setValueAtTime(0.04, time + note[1] - 0.05);
+                gain.gain.linearRampToValueAtTime(0, time + note[1] - 0.01);
+                osc.start(time);
+                osc.stop(time + note[1]);
+                time += note[1];
+            });
+            bgmTimeout = setTimeout(playRetroBGM, (time - audioCtx.currentTime) * 1000);
+        }
+
+        function initBGM() {
+            if (isBgmPlaying || !allowBgm) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                isBgmPlaying = true;
+                playRetroBGM();
+            } catch(e) {}
+        }
+
+        function stopBGM() {
+            isBgmPlaying = false;
+            allowBgm = false;
+            if (bgmTimeout) clearTimeout(bgmTimeout);
+        }
+
+        function updateTimer() {
+            if (!gameStartTime || isGameOver) return;
+            const now = Date.now();
+            const diff = Math.floor((now - gameStartTime) / 1000);
+            const m = String(Math.floor(diff / 60)).padStart(2, '0');
+            const s = String(diff % 60).padStart(2, '0');
+            const timerEl = document.getElementById('game-timer');
+            if (timerEl) {
+                timerEl.innerText = `⏱️ ${m}:${s}`;
+            }
+        }
+
+        function log(msg, type = 'event') { 
+            const box = document.getElementById('game-log'); 
+            if(box) { 
+                const colorClass = type === 'move' ? 'text-white' : 'text-yellow-300';
+                box.innerHTML = `<div class="${colorClass} mb-0.5">> ${msg}</div>` + box.innerHTML; 
+            }
+        }
+
+        function formatCellName(name) {
+            if (name.includes('산시(')) {
+                return name.replace(/(산시)\(([^)]+)\)성/, '$1성<br>($2)');
+            }
+            return name;
+        }
+
+        function getPopupTitle(spot) {
+            if (spot.type === 'city' || spot.type === 'muni' || spot.name === '홍콩' || spot.name === '마카오' || spot.type === 'airplane') {
+                let cleanName = spot.name.replace(/\([^)]*\)/g, ""); 
+                return `
+                    <div class="text-3xl font-black text-slate-800 leading-tight">${cleanName}</div>
+                    <div class="text-sm md:text-base font-bold text-slate-500 mt-2 tracking-wide bg-slate-100 py-1 px-4 rounded-full inline-block">
+                        ${spot.hanzi || '✈️ Terminal'} [ ${spot.pinyin || 'Air Terminal'} ]
+                    </div>
+                `;
+            }
+            return `<div class="text-3xl font-black text-slate-800 leading-tight">${spot.name}</div>`;
+        }
+
+        function updateTokenPositions() {
+            const board = document.getElementById('board');
+            if (!board) return;
+            players.forEach(p => {
+                if (p.isBankrupt) return;
+                const token = document.getElementById("token-" + p.id); 
+                const cell = document.getElementById("cell-" + p.pos);
+                if(!token || !cell) return;
+                const rect = cell.getBoundingClientRect(); 
+                const boardRect = board.getBoundingClientRect();
+                const offset = [[-6,-6], [6,-6], [-6,6], [6,6]][p.id-1];
+                token.style.left = (rect.left - boardRect.left + rect.width/2 + offset[0] - 11) + 'px';
+                token.style.top = (rect.top - boardRect.top + rect.height/2 + offset[1] - 11) + 'px';
+            });
+        }
+
+        function syncLayoutClasses() {
+            const mainLayout = document.querySelector('.main-layout');
+            if (!mainLayout) return;
+            mainLayout.classList.remove('left-collapsed', 'right-collapsed');
+        }
+
+        function updateUI() {
+            const p = players[currentPlayerIdx]; 
+            const nameEl = document.getElementById('current-player-name');
+            if(nameEl) {
+                nameEl.innerText = p.name;
+                nameEl.style.color = p.color;
+            }
+            const container = document.getElementById('player-status-container'); 
+            if(container) {
+                container.innerHTML = '';
+                players.forEach((pl, i) => {
+                    container.innerHTML += `
+                        <div class="player-status-card ${i === currentPlayerIdx ? 'player-active ring-2 ring-offset-1 ring-white/40' : ''} ${pl.isBankrupt ? 'opacity-30' : ''}" style="border-color: ${pl.color}">
+                            <div class="text-[clamp(0.72rem,1.55vmin,1.1rem)] md:text-sm lg:text-base font-black leading-tight truncate" style="color: ${pl.color}">${pl.name}</div>
+                            <div class="text-[clamp(0.95rem,2.15vmin,1.55rem)] md:text-base lg:text-lg font-black mt-0.5 leading-none whitespace-nowrap text-slate-800">${pl.money.toLocaleString()}만</div>
+                        </div>
+                    `;
+                    const list = document.getElementById("p" + pl.id + "-asset-list");
+                    if (list) {
+                        if (pl.assets.length === 0) {
+                            list.innerHTML = `<div class="text-[0.6rem] text-slate-400 text-center col-span-2 py-8 italic">소유 영토 없음</div>`;
+                        } else { 
+                            const activePlayer = players[currentPlayerIdx];
+                            const isCurrentTurn = (pl.id === activePlayer.id);
+
+                            list.innerHTML = pl.assets.map(a => {
+                                let emojiMarker = "";
+                                if (a.type === 'city' && a.hotel) emojiMarker = " 🏨";
+                                
+                                const displayName = a.name + emojiMarker;
+                                const currentPrice = a.type === 'muni' ? (a.price * 2) : (a.type === 'airplane' ? 40 : (a.hotel ? (a.stay || (a.price * 1.2).toFixed(0)) : (a.price * 0.3).toFixed(0)));
+                                
+                                const totalInvestment = a.price + (a.hotel ? (a.hotelCost || 20) : 0);
+                                const refundVal = Math.floor(totalInvestment * 0.8);
+
+                                const sellButtonHTML = isCurrentTurn ? `
+                                    <button onclick="window.sellAssetActive(${players.indexOf(pl)}, ${a.id})" class="mt-2 w-full py-1 bg-red-500 hover:bg-red-600 text-white font-extrabold text-[0.58rem] rounded-lg transition-all duration-150 shadow-inner hover:scale-[1.03] active:scale-[0.97]">
+                                        판매
+                                    </button>
+                                ` : '';
+
+                                return `
+                                    <div class="flex flex-col p-1.5 rounded-lg border border-slate-100 bg-slate-50 relative overflow-hidden" style="border-top: 3px solid ${a.color || '#cbd5e1'}">
+                                        <span class="font-extrabold text-[0.62rem] text-slate-800 truncate">${displayName}</span>
+                                        <div class="flex flex-col mt-0.5 leading-none">
+                                            <span class="text-[0.55rem] font-black text-red-500 mt-0.5">${currentPrice}만 수입</span>
+                                        </div>
+                                        ${sellButtonHTML}
+                                    </div>
+                                `;
+                            }).join(''); 
+                        }
+                    }
+                });
+            }
+        }
+
+        function nextTurn() {
+            if (isGameOver) return;
+            do { currentPlayerIdx = (currentPlayerIdx + 1) % players.length; } while (players[currentPlayerIdx].isBankrupt);
+            updateUI(); 
+            
+            const nextPlayer = players[currentPlayerIdx];
+            
+            if (nextPlayer.isJailed > 0) {
+                nextPlayer.isJailed--;
+                
+                const nameEl = document.getElementById('current-player-name');
+                if (nameEl) {
+                    nameEl.innerText = nextPlayer.name + " (조난 중)";
+                    nameEl.style.color = '#ef4444';
+                }
+                
+                log(`🏝️ ${nextPlayer.name}님은 무인도 조난 상태입니다! 주사위를 굴리지 못하고 이번 턴을 강제로 쉬어갑니다.`, 'event');
+                playSound('mock'); 
+                
+                isRolling = true; 
+                setTimeout(() => {
+                    nextTurn(); 
+                }, 1000);
+                return;
+            }
+
+            isRolling = false; 
+
+            const diceEl = document.getElementById('dice');
+            if (diceEl) {
+                if (nextPlayer.airplaneTicket) {
+                    diceEl.innerText = "✈️";
+                    diceEl.title = "클릭하여 목적지로 비행";
+                } else {
+                    diceEl.innerText = "🎲";
+                    diceEl.title = "클릭하여 주사위 굴리기";
+                }
+            }
+        }
+
+        function updatePlayerInputs() {
+            const count = parseInt(document.getElementById('player-count').value);
+            const container = document.getElementById('player-names-setup');
+            container.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                container.innerHTML += `<input type="text" id="p${i}-name" class="w-full p-4 border-2 border-slate-100 rounded-2xl font-black text-center text-lg outline-none focus:border-red-600 mb-2" value="Traveler ${i}">`;
+            }
+        }
+
+        function showIntro() {
+            stopBGM();
+
+            const countInput = document.getElementById('player-count');
+            if (!countInput) return;
+            const count = parseInt(countInput.value);
+            players = [];
+            for (let i = 1; i <= count; i++) {
+                const nameInput = document.getElementById(`p${i}-name`);
+                players.push({ id: i, name: nameInput ? (nameInput.value || `Traveler ${i}`) : `Traveler ${i}`, money: 200, pos: 0, assets: [], isJailed: 0, color: PLAYER_COLORS[i-1], isBankrupt: false, hasLapped: false, airplaneTicket: false });
+            }
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('intro-overlay').classList.remove('hidden');
+            playSound('money');
+        }
+
+        function showLandInfo(page = 0) {
+            initLandPages(); 
+            currentLandPage = page;
+            const overlay = document.getElementById('land-info-overlay');
+            const content = document.getElementById('land-info-content');
+            const pagination = document.getElementById('land-info-pagination');
+            
+            overlay.classList.remove('hidden');
+            
+            const pageInfo = LAND_PAGES[page];
+            const pageData = pageInfo.data;
+            const totalPages = LAND_PAGES.length;
+
+            content.innerHTML = pageData.map(spot => {
+                const cleanName = spot.name.replace(/<br>/g, ' ').replace(/\([^)]*\)/g, ""); 
+                let label = spot.label;
+                if (spot.name === '홍콩' || spot.name === '마카오') label = '특별행정구';
+
+                return `
+                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-md flex flex-col h-full hover:scale-[1.02] transition-transform">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="text-3xl">${spot.emoji || '🏙️'}</span>
+                            <h3 class="text-xl font-black text-black truncate">${cleanName}</h3>
+                            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold whitespace-nowrap">${label || '지역'}</span>
+                        </div>
+                        ${spot.hanzi ? `<div class="text-sm text-slate-400 font-bold mb-4 tracking-wide">${spot.hanzi} [${spot.pinyin}]</div>` : ''}
+                        <p class="text-[0.95rem] text-slate-600 leading-relaxed flex-1">${spot.desc}</p>
+                    </div>
+                `;
+            }).join('');
+
+            pagination.innerHTML = `
+                <button onclick="window.showLandInfo(${page - 1})" ${page === 0 ? 'disabled class="opacity-50 cursor-not-allowed px-5 py-3 bg-slate-200 text-slate-400 rounded-2xl font-black shadow-sm"' : 'class="px-5 py-3 bg-slate-800 text-white rounded-2xl font-black hover:bg-slate-700 shadow-md transition-all"'}>◀ 이전</button>
+                <span class="font-black text-red-600 text-xl mx-2">${pageInfo.title} <span class="text-slate-400 text-sm ml-1">(${page + 1} / ${totalPages})</span></span>
+                <button onclick="window.showLandInfo(${page + 1})" ${page === totalPages - 1 ? 'disabled class="opacity-50 cursor-not-allowed px-5 py-3 bg-slate-200 text-slate-400 rounded-2xl font-black shadow-sm"' : 'class="px-5 py-3 bg-slate-800 text-white rounded-2xl font-black hover:bg-slate-700 shadow-md transition-all"'}>다음 ▶</button>
+            `;
+        }
+
+        function closeLandInfo() {
+            document.getElementById('land-info-overlay').classList.add('hidden');
+        }
+
+        function backToSetupFromInfo() {
+            closeLandInfo();
+            document.getElementById('intro-overlay').classList.add('hidden');
+            document.getElementById('setup-screen').classList.remove('hidden');
+            allowBgm = true; 
+            window.initBGM(); 
+        }
+
+        function launchGame() {
+            document.getElementById('intro-overlay').classList.add('hidden');
+            document.getElementById('main-layout-container').classList.add('game-active');
+
+            const leftSidebar = document.getElementById('left-sidebar');
+            const rightSidebar = document.getElementById('right-sidebar');
+            
+            leftSidebar.classList.remove('hidden');
+            rightSidebar.classList.remove('hidden');
+            
+            leftSidebar.classList.remove('collapsed', 'sidebar-open');
+            rightSidebar.classList.remove('collapsed', 'sidebar-open');
+
+            for (let i = 1; i <= 4; i++) {
+                const pPanel = document.getElementById(`p${i}-assets`);
+                if (pPanel) {
+                    if (i <= players.length) {
+                        pPanel.classList.remove('hidden');
+                        const header = document.getElementById(`p` + i + `-assets-header`);
+                        if (header) {
+                            header.innerText = `Player ${i} : ${players[i-1].name}`;
+                        }
+                    } else {
+                        pPanel.classList.add('hidden');
+                    }
+                }
+            }
+
+            syncLayoutClasses();
+
+            document.getElementById('game-center-ui').classList.remove('hidden');
+            
+            isRolling = false;
+            isGameOver = false;
+
+            gameStartTime = Date.now();
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+            updateTimer();
+            
+            initBoard(); 
+            updateUI(); 
+            log("중국 대륙 횡단 여행 시작! 주사위를 굴려주세요.", 'event'); 
+            playSound('land');
+            
+            setTimeout(updateTokenPositions, 100);
+        }
+
+        function initBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = ''; 
+            BOARD_DATA.forEach((data, index) => {
+                const cell = document.createElement('div');
+                cell.className = 'cell'; cell.id = `cell-${index}`;
+                cell.style.gridRow = data.r; cell.style.gridColumn = data.c;
+                cell.onclick = () => window.onCellClick(index);
+                
+                let inner = `<div class="cell-owner" id="owner-bar-${index}"></div>`;
+                if (data.type === 'city' || data.type === 'muni') {
+                    const groupColor = data.color || '#cbd5e1';
+                    inner += `
+                        <div class="absolute top-0 left-0 w-full h-[8px]" style="background-color: ${groupColor};"></div>
+                        <div class="cell-label mt-[6px]" style="color: ${groupColor}; font-weight:900;">${data.label || '지역'}</div>
+                        <div class="cell-title">${formatCellName(data.name)}</div>
+                        <div class="cell-price">${data.price}만</div>
+                        <div id="hotel-icon-${index}" class="hidden absolute bottom-2 right-1 text-[0.6rem]">🏨</div>
+                    `;
+                } else if (data.name === '홍콩' || data.name === '마카오') {
+                    cell.className = 'cell bg-gradient-to-br from-fuchsia-100 via-purple-100 to-indigo-100 border-2 border-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.15)] hover:scale-105 transition-all duration-300 z-30 flex flex-col justify-center items-center';
+                    inner += `
+                        <div class="text-[clamp(1.2rem,2.8vmin,2.0rem)] leading-none mb-1">🎁</div>
+                        <div class="text-[clamp(0.55rem,1.15vmin,0.78rem)] font-black text-purple-950 whitespace-nowrap tracking-wide leading-none mt-1">${data.name}</div>
+                    `;
+                } else if (data.type === 'airplane') {
+                    inner += `
+                        <div class="cell-emoji">${data.emoji}</div>
+                        <div class="cell-title text-blue-600">${data.name}</div>
+                        <div class="cell-price">${data.price}만</div>
+                    `;
+                } else {
+                    inner += `<div class="cell-emoji">${data.emoji}</div><div class="cell-title text-blue-600">${data.name}</div>`;
+                }
+                cell.innerHTML = inner; board.appendChild(cell);
+            });
+            players.forEach(p => {
+                const token = document.createElement('div');
+                token.className = 'player-token'; token.id = `token-${p.id}`;
+                token.style.backgroundColor = p.color; token.innerText = p.id;
+                board.appendChild(token);
+            });
+            updateTokenPositions();
+        }
+
+        function onCellClick(index) {
+            if (!airplaneMode || isRolling) return;
+            
+            isRolling = true; 
+            
+            const p = players[currentPlayerIdx];
+            p.hasLapped = true;
+
+            if (index < p.pos && index !== 0) {
+                p.money += 20;
+                log(`💰 ${p.name}님이 전용기를 통해 출발지를 지나 보조금 20만 위안을 수령했습니다.`, 'event');
+                playSound('money');
+            } else if (index === 0) {
+                p.money += 20;
+                log(`💰 ${p.name}님이 전용기를 통해 출발지에 안착하여 보조금 20만 위안을 수령했습니다.`, 'event');
+                playSound('money');
+            }
+
+            p.pos = index;
+            p.airplaneTicket = false;
+            airplaneMode = false;
+            const airplaneInfo = document.getElementById('airplane-info');
+            if (airplaneInfo) airplaneInfo.classList.add('hidden');
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('cell-selectable'));
+            playSound('move');
+            updateTokenPositions();
+            
+            setTimeout(() => {
+                handleLand(p);
+            }, 400); 
+        }
+
+        function handleRollDice() {
+            if (isRolling || isGameOver) return; 
+            
+            const p = players[currentPlayerIdx];
+            
+            if (p.airplaneTicket) { 
+                airplaneMode = true; 
+                const airplaneInfo = document.getElementById('airplane-info');
+                if (airplaneInfo) airplaneInfo.classList.remove('hidden'); 
+                document.querySelectorAll('.cell').forEach(c => c.classList.add('cell-selectable')); 
+                log(`✈️ ${p.name}님, 비행할 목적지 타일을 정성껏 클릭해 주세요!`, 'event'); 
+                playSound('money'); 
+                return; 
+            }
+            
+            isRolling = true; 
+            
+            const dice = document.getElementById('dice'); 
+            dice.classList.add('dice-rolling');
+            
+            let tempIndex = 0;
+            const rollSfx = setInterval(() => {
+                playSound('dice');
+                dice.innerText = DICE_EMOJIS[tempIndex % 6];
+                tempIndex++;
+            }, 80); 
+            
+            setTimeout(() => {
+                clearInterval(rollSfx);
+                const roll = Math.floor(Math.random() * 6) + 1;
+                dice.classList.remove('dice-rolling');
+                
+                dice.innerText = DICE_EMOJIS[roll - 1];
+                
+                const startPosName = BOARD_DATA[p.pos].name.replace(/<br>/g, '');
+                const targetPosIndex = (p.pos + roll) % BOARD_DATA.length;
+                const targetPosName = BOARD_DATA[targetPosIndex].name.replace(/<br>/g, '');
+                
+                log(`${p.name}님이 ${roll}칸 이동합니다. <span class="move-path">(${startPosName} ➔ ${targetPosName})</span>`, 'move'); 
+                playSound('land');
+                movePlayer(p, roll); 
+            }, 500);
+        }
+
+        function movePlayer(p, steps) {
+            let count = 0;
+            const interval = setInterval(() => {
+                p.pos = (p.pos + 1) % BOARD_DATA.length;
+                playSound('move');
+                
+                if (p.pos === 0) { 
+                    p.money += 20; 
+                    p.hasLapped = true; 
+                    log("💰 출발지 통과! 지원금 20만 위안 수령.", 'event'); 
+                    playSound('money'); 
+                    updateUI();
+                }
+                
+                updateTokenPositions(); 
+                count++;
+                
+                if (count >= steps) { 
+                    clearInterval(interval); 
+                    playSound('land'); 
+                    handleLand(p); 
+                }
+            }, 300); 
+        }
+
+        function handleLand(p) {
+            const spot = BOARD_DATA[p.pos]; 
+            updateUI();
+            
+            if (spot.type === 'city' || spot.type === 'muni') {
+                const owner = players.find(pl => pl.assets.some(a => a.id === spot.id));
+                if (!owner) { 
+                    if (p.hasLapped) {
+                        showPurchasePopup(p, spot);
+                    } else { 
+                        showFirstLapSurveyPopup(p, spot);
+                    } 
+                }
+                else if (owner.id === p.id) { 
+                    showBuildPopup(p, spot); 
+                }
+                else { 
+                    payTax(p, owner, spot); 
+                }
+            } else if (spot.type === 'bonus') { 
+                if (spot.name === '황금열쇠') {
+                    handleGoldenKey(p);
+                } else {
+                    handleBonus(p);
+                }
+            }
+            else if (spot.type === 'jail') { 
+                p.isJailed = 1; 
+                log(`🏝️ ${p.name}님이 무인도에 표류! 다음 턴 행동 불가.`, 'event'); 
+                playSound('mock'); 
+                setTimeout(nextTurn, 1000); 
+            }
+            else if (spot.type === 'airplane') { 
+                const owner = players.find(pl => pl.assets.some(a => a.id === spot.id));
+                if (!owner) {
+                    if (p.hasLapped) {
+                        showAirplanePurchasePopup(p, spot);
+                    } else {
+                        showFirstLapSurveyPopup(p, spot);
+                    }
+                } else if (owner.id === p.id) {
+                    p.airplaneTicket = true;
+                    log(`✈️ 내 전용기 터미널 안착! 다음 턴 무료 비행.`, 'event');
+                    playSound('money');
+                    setTimeout(nextTurn, 1000);
+                } else {
+                    payAirplaneRent(p, owner, spot);
+                }
+            }
+            else if (spot.type === 'quiz') { 
+                showQuizPopup(p); 
+            }
+            else { 
+                setTimeout(nextTurn, 800); 
+            }
+        }
+
+        window.closeSurveyPopup = function() {
+            document.getElementById('popup-overlay').style.display = 'none';
+            const p = players[currentPlayerIdx];
+            const spot = BOARD_DATA[p.pos];
+            if (spot.type === 'airplane') {
+                p.airplaneTicket = true;
+                log(`✈️ ${p.name}님이 사전 조사를 마치고 전용기 무료 탑승권을 획득했습니다!`, 'event');
+                playSound('money');
+            } else {
+                log(`[사전 조사] ${spot.name} 탐방 및 정보 확인 완료.`, 'event');
+            }
+            updateUI();
+            nextTurn();
+        }
+
+        function showFirstLapSurveyPopup(p, spot) {
+            playSound('money');
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = spot.color || '#cbd5e1';
+            
+            let infoGridHTML = "";
+            if (spot.type === 'muni') {
+                infoGridHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-blue-50/80 p-4 rounded-2xl border border-blue-100 shadow-sm col-span-1">
+                            <div class="text-xs text-blue-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏛️ 예상 매입가</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-red-50/80 p-4 rounded-2xl border border-red-100 shadow-sm col-span-1">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">💸 기본 통행료 (2배)</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price * 2}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                `;
+            } else if (spot.type === 'airplane') {
+                infoGridHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-blue-50/80 p-4 rounded-2xl border border-blue-100 shadow-sm col-span-1">
+                            <div class="text-xs text-blue-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">✈️ 터미널 매입가</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-red-50/80 p-4 rounded-2xl border border-red-100 shadow-sm col-span-1">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">💸 타인 이용료</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">40만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                infoGridHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-blue-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">🪙 예상 토지 매입가</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">💸 토지 통행세</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${(spot.price * 0.3).toFixed(0)}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-amber-600 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏨 호텔 건설비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.hotel || 20}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-purple-600 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏛️ 호텔 숙박비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.stay || (spot.price * 1.2).toFixed(0)}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-[0.65rem] font-black text-blue-500 tracking-[0.2em] mb-2 uppercase">1st Lap Survey (사전 조사)</div>
+                    <div class="mb-5">${getPopupTitle(spot)}</div>
+                    
+                    <div class="bg-gray-50 p-5 rounded-3xl mb-5 text-[0.98rem] md:text-[1.05rem] font-medium text-slate-700 leading-relaxed text-left border border-slate-100 max-h-32 overflow-y-auto">${spot.desc}</div>
+                    
+                    ${infoGridHTML}
+                    <p class="text-xs font-semibold text-rose-500 mb-6 bg-rose-50 p-2.5 rounded-xl border border-rose-200 shadow-inner">🚨 첫 바퀴 완주 후부터 영토 구입이 가능합니다.</p>
+                    <button onclick="window.closeSurveyPopup()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 text-base">토지 정보 확인 (건너가기)</button>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        function showAirplanePurchasePopup(p, spot) {
+            playSound('money');
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = '#3b82f6';
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="mb-5">${getPopupTitle(spot)}</div>
+                    <div class="bg-gray-50 p-5 rounded-3xl mb-5 text-[0.98rem] md:text-[1.05rem] font-medium text-slate-700 leading-relaxed text-left border border-slate-100 max-h-32 overflow-y-auto">${spot.desc}</div>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm col-span-1">
+                            <div class="text-xs text-blue-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">🪙 전용기 매입비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm col-span-1">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">💸 타인 이용료</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">40만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <button onclick="window.confirmAirplanePurchase(true)" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg">매입하기 (30만)</button>
+                        <button onclick="window.confirmAirplanePurchase(false)" class="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-2xl">무료 이용만 하기</button>
+                    </div>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        function confirmAirplanePurchase(buy) {
+            const p = players[currentPlayerIdx];
+            const spot = BOARD_DATA[p.pos];
+            if (buy) {
+                if (p.money >= spot.price) {
+                    p.money -= spot.price;
+                    p.assets.push({ ...spot, hotel: false, hotelCost: 0 });
+                    const ownerBar = document.getElementById(`owner-bar-${spot.id}`);
+                    if (ownerBar) ownerBar.style.backgroundColor = p.color;
+                    log(`✈️ 전용기 터미널 매입 완료! 다음 차례에 목적지 선택 및 비행이 가능합니다.`, 'event');
+                    playSound('money');
+                    p.airplaneTicket = true;
+                    document.getElementById('popup-overlay').style.display = 'none';
+                    updateUI();
+                    nextTurn();
+                } else {
+                    log("❌ 매입 자금 부족!", 'event');
+                    document.getElementById('popup-overlay').style.display = 'none';
+                    handleLiquidation(p, spot.price, () => {
+                        p.money -= spot.price;
+                        p.assets.push({ ...spot, hotel: false, hotelCost: 0 });
+                        const ownerBar = document.getElementById(`owner-bar-${spot.id}`);
+                        if (ownerBar) ownerBar.style.backgroundColor = p.color;
+                        log(`✈️ 전용기 터미널 매입 완료! 다음 차례에 목적지 선택 및 비행이 가능합니다.`, 'event');
+                        playSound('money');
+                        p.airplaneTicket = true;
+                        updateUI();
+                        nextTurn();
+                    });
+                }
+            } else {
+                log(`✈️ 전용기를 무료로 탑승했습니다! 다음 차례에 목적지 선택 및 비행이 가능합니다.`, 'event');
+                p.airplaneTicket = true;
+                document.getElementById('popup-overlay').style.display = 'none';
+                updateUI();
+                nextTurn();
+            }
+        }
+
+        function showPurchasePopup(p, spot) {
+            playSound('money');
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = spot.color || '#000';
+
+            let purchaseGridHTML = "";
+            if (spot.type === 'muni') {
+                purchaseGridHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm col-span-1">
+                            <div class="text-xs text-blue-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏛️ 토지 매입비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm col-span-1">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">💸 기본 통행세 (2배)</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price * 2}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-500 mb-6 bg-amber-50 p-2.5 rounded-xl text-center leading-relaxed">※ 직할시는 영토 등급이 우수하여 호텔을 건설할 수 없으며, 기본 통행료가 매입가의 2배로 계산됩니다.</p>
+                `;
+            } else {
+                purchaseGridHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-blue-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">🪙 토지 매입비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.price}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">💸 기본 통행료</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${(spot.price * 0.3).toFixed(0)}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-amber-600 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏨 예상 호텔 건설가</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.hotel || 20}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-purple-600 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏛️ 호텔 숙박비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.stay || (spot.price * 1.2).toFixed(0)}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="mb-5">${getPopupTitle(spot)}</div>
+                    
+                    <div class="bg-gray-50 p-5 rounded-3xl mb-5 text-[0.98rem] md:text-[1.05rem] font-medium text-slate-700 leading-relaxed text-left border border-slate-100 max-h-32 overflow-y-auto">${spot.desc}</div>
+                    
+                    ${purchaseGridHTML}
+                    <div class="flex gap-4">
+                        <button onclick="window.confirmPurchase(true)" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg">매입하기</button>
+                        <button onclick="window.confirmPurchase(false)" class="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-2xl">지나가기</button>
+                    </div>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        function confirmPurchase(buy) {
+            const p = players[currentPlayerIdx]; const spot = BOARD_DATA[p.pos];
+            if (buy) {
+                if (p.money >= spot.price) { 
+                    p.money -= spot.price; 
+                    p.assets.push({ ...spot, hotel: false, hotelCost: spot.hotel || 20 }); 
+                    const ownerBar = document.getElementById(`owner-bar-${spot.id}`);
+                    if (ownerBar) ownerBar.style.backgroundColor = p.color; 
+                    log(`🏙️ ${spot.name} 매입 완료!`, 'event'); 
+                    playSound('money'); 
+                    document.getElementById('popup-overlay').style.display = 'none'; 
+                    updateUI(); 
+                    nextTurn();
+                }
+                else { 
+                    log("❌ 잔고 부족! 매각 절차를 시작합니다.", 'event'); 
+                    document.getElementById('popup-overlay').style.display = 'none';
+                    handleLiquidation(p, spot.price, () => {
+                        p.money -= spot.price;
+                        p.assets.push({ ...spot, hotel: false, hotelCost: spot.hotel || 20 });
+                        const ownerBar = document.getElementById(`owner-bar-${spot.id}`);
+                        if (ownerBar) ownerBar.style.backgroundColor = p.color;
+                        log(`🏙️ ${spot.name} 매입 완료!`, 'event');
+                        playSound('money');
+                        updateUI();
+                        nextTurn();
+                    });
+                }
+            } else {
+                document.getElementById('popup-overlay').style.display = 'none'; updateUI(); nextTurn();
+            }
+        }
+
+        function showBuildPopup(p, spot) {
+            if (spot.type === 'muni') {
+                log(`🏛️ ${spot.name}은 직할시이므로 추가 건물을 건설할 수 없습니다.`, 'event');
+                setTimeout(nextTurn, 1000);
+                return;
+            }
+            playSound('money'); const asset = p.assets.find(a => a.id === spot.id);
+            if (asset && asset.hotel) { log("이미 최고급 건물이 세워졌습니다.", 'event'); setTimeout(nextTurn, 1000); return; }
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = p.color;
+            const cost = spot.hotel || 20;
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="mb-5">${getPopupTitle(spot)}</div>
+                    <p class="text-sm font-bold text-blue-600 mb-6">내 도시입니다! 호텔을 지어 수익을 올릴까요?</p>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-amber-600 font-extrabold mb-1.5 flex items-center justify-center gap-1">🏨 호텔 건설비</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${cost}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                        <div class="bg-slate-50/80 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="text-xs text-rose-500 font-extrabold mb-1.5 flex items-center justify-center gap-1">📈 인상 후 숙박료</div>
+                            <div class="text-xl md:text-2xl font-black text-slate-800">${spot.stay || (spot.price * 1.2).toFixed(0)}만 <span class="text-xs md:text-sm font-bold text-slate-400">위안</span></div>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <button onclick="window.confirmBuild(true)" class="flex-1 py-5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl">호텔 건설</button>
+                        <button onclick="window.confirmBuild(false)" class="flex-1 py-5 bg-gray-100 text-gray-500 font-black rounded-2xl">나중에</button>
+                    </div>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        function confirmBuild(build) {
+            const p = players[currentPlayerIdx]; const spot = BOARD_DATA[p.pos];
+            if (build) {
+                const cost = spot.hotel || 20;
+                if (p.money >= cost) { 
+                    p.money -= cost; 
+                    const targetAsset = p.assets.find(a => a.id === spot.id);
+                    if (targetAsset) {
+                        targetAsset.hotel = true; 
+                        const hotelIcon = document.getElementById(`hotel-icon-${spot.id}`);
+                        if (hotelIcon) hotelIcon.classList.remove('hidden'); 
+                        log(`🏨 ${spot.name} 호텔 완공!`, 'event'); 
+                        playSound('money'); 
+                    } else {
+                        log(`❌ ${spot.name} 자산을 소유하고 있지 않아 호텔을 건설할 수 없습니다.`, 'event');
+                    }
+                    document.getElementById('popup-overlay').style.display = 'none'; updateUI(); nextTurn();
+                }
+                else { 
+                    log("❌ 건설 자금 부족! 매각 절차를 시작합니다.", 'event'); 
+                    document.getElementById('popup-overlay').style.display = 'none';
+                    handleLiquidation(p, cost, () => {
+                        p.money -= cost;
+                        const targetAsset = p.assets.find(a => a.id === spot.id);
+                        if (targetAsset) {
+                            targetAsset.hotel = true;
+                            const hotelIcon = document.getElementById(`hotel-icon-${spot.id}`);
+                            if (hotelIcon) hotelIcon.classList.remove('hidden');
+                            log(`🏨 ${spot.name} 호텔 완공!`, 'event');
+                            playSound('money');
+                        } else {
+                            log(`❌ ${spot.name} 자산을 소유하고 있지 않아 호텔을 건설할 수 없습니다.`, 'event');
+                        }
+                        updateUI();
+                        nextTurn();
+                    });
+                }
+            } else {
+                document.getElementById('popup-overlay').style.display = 'none'; updateUI(); nextTurn();
+            }
+        }
+
+        function payTax(p, owner, spot) {
+            const asset = owner.assets.find(a => a.id === spot.id);
+            if (!asset) return;
+            const amt = (spot.type === 'muni') ? (spot.price * 2) : (asset.hotel ? (spot.stay || Math.round(spot.price * 1.2)) : Math.round(spot.price * 0.3));
+            
+            playSound('mock');
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = owner.color;
+            
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-5xl my-3">💸</div>
+                    <h2 class="text-2xl font-black text-red-600 mb-2">통행료 지불</h2>
+                    <p class="mb-4 text-sm font-bold text-slate-600">이곳은 <span style="color:${owner.color}">${owner.name}</span>님의 영토입니다.</p>
+                    <div class="bg-red-50 p-4 rounded-2xl border border-red-100 mb-6">
+                        <div class="text-xs text-red-500 font-extrabold mb-1">지불해야 할 금액</div>
+                        <div class="text-3xl font-black text-slate-900">${amt}만 <span class="text-lg text-slate-500">위안</span></div>
+                    </div>
+                    <button onclick="window.executePayment(${amt}, ${owner.id})" class="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl shadow-lg transition-all">지불하기</button>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        window.executePayment = function(amt, ownerId) {
+            const p = players[currentPlayerIdx];
+            const owner = players.find(pl => pl.id === ownerId);
+            
+            if (p.money >= amt) {
+                p.money -= amt;
+                owner.money += amt;
+                document.getElementById('popup-overlay').style.display = 'none';
+                log(`💸 ${p.name}님이 ${owner.name}님께 통행료 ${amt}만 위안을 지불했습니다.`, 'event');
+                playSound('money');
+                updateUI();
+                nextTurn();
+            } else {
+                document.getElementById('popup-overlay').style.display = 'none';
+                log("❌ 통행료 지불 자금 부족! 매각 절차를 시작합니다.", 'event');
+                handleLiquidation(p, amt, () => {
+                    p.money -= amt;
+                    owner.money += amt;
+                    log(`💸 ${p.name}님이 ${owner.name}님께 통행료 ${amt}만 위안을 지불했습니다.`, 'event');
+                    playSound('money');
+                    updateUI();
+                    nextTurn();
+                });
+            }
+        };
+
+        function payAirplaneRent(p, owner, spot) {
+            const rent = 40; 
+            
+            playSound('mock');
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = owner.color;
+            
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-5xl my-3">✈️</div>
+                    <h2 class="text-2xl font-black text-blue-600 mb-2">터미널 이용료 지불</h2>
+                    <p class="mb-4 text-sm font-bold text-slate-600">이곳은 <span style="color:${owner.color}">${owner.name}</span>님의 터미널입니다.</p>
+                    <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-6">
+                        <div class="text-xs text-blue-500 font-extrabold mb-1">지불해야 할 금액</div>
+                        <div class="text-3xl font-black text-slate-900">${rent}만 <span class="text-lg text-slate-500">위안</span></div>
+                    </div>
+                    <button onclick="window.executeAirplanePayment(${rent}, ${owner.id})" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg transition-all">지불하고 탑승권 받기</button>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        window.executeAirplanePayment = function(rent, ownerId) {
+            const p = players[currentPlayerIdx];
+            const owner = players.find(pl => pl.id === ownerId);
+
+            if (p.money >= rent) {
+                p.money -= rent;
+                owner.money += rent;
+                p.airplaneTicket = true; 
+                document.getElementById('popup-overlay').style.display = 'none';
+                log(`💸 ${p.name}님이 터미널 이용료 40만 위안을 지불하고 탑승권을 획득했습니다!`, 'event');
+                playSound('money');
+                updateUI();
+                nextTurn();
+            } else {
+                document.getElementById('popup-overlay').style.display = 'none';
+                handleLiquidation(p, rent, () => {
+                    p.money -= rent;
+                    owner.money += rent;
+                    p.airplaneTicket = true;
+                    log(`💸 ${p.name}님이 터미널 이용료 40만 위안을 지불하고 탑승권을 획득했습니다!`, 'event');
+                    playSound('money');
+                    updateUI();
+                    nextTurn();
+                });
+            }
+        };
+
+        function handleLiquidation(p, needed, callback) {
+            playSound('land'); if (p.assets.length === 0) { bankruptcyPlayer(p); return; }
+            
+            liquidationState = { player: p, needed: needed, callback: callback };
+            
+            const overlay = document.getElementById('popup-overlay'); const content = document.getElementById('popup-content');
+            overlay.style.display = 'flex';
+            
+            renderLiquidationContent();
+        }
+
+        function renderLiquidationContent() {
+            const p = liquidationState.player;
+            const needed = liquidationState.needed;
+            if (!p) return;
+
+            const content = document.getElementById('popup-content');
+            content.style.borderColor = '#ef4444'; 
+            
+            const shortage = needed - p.money;
+            const isShortageCleared = shortage <= 0;
+            const remainingOrSurplus = isShortageCleared 
+                ? `<span class="text-emerald-600 font-extrabold text-sm md:text-base">💸 매각 자금 충족! 지불 후 남는 금액: <span class="underline">${p.money - needed}만 위안</span></span>`
+                : `<span class="text-rose-600 font-extrabold text-sm md:text-base">⚠️ 남은 필요 부족액: <span class="underline">${shortage}만 위안</span></span>`;
+
+            content.innerHTML = `
+                <div class="text-center">
+                    <h2 class="text-2xl font-black text-red-600 mb-4">⚠️ 자금 부족 정산 경보</h2>
+                    <p class="mb-4 text-xs font-bold text-gray-500">통행세나 대금을 납부하기 위해 영토를 판매해야 합니다.</p>
+                    
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-5 text-xs text-slate-600 space-y-1 text-left">
+                        <div>• 청구 정산액: <span class="font-black text-slate-800">${needed}만 위안</span></div>
+                        <div>• 현재 소지금: <span class="font-black text-slate-800">${p.money}만 위안</span></div>
+                        <div class="pt-2 border-t border-slate-200/60 mt-1.5 text-center">${remainingOrSurplus}</div>
+                    </div>
+                    
+                    <div class="space-y-2 max-h-44 overflow-y-auto mb-5 pr-1">
+                        ${p.assets.map((a, i) => {
+                            const totalCost = a.price + (a.hotel ? (a.hotelCost || 20) : 0);
+                            const price = Math.floor(totalCost * 0.8);
+                            return `
+                                <div class="flex justify-between items-center p-2.5 bg-gray-50 rounded-xl border border-slate-100 text-xs">
+                                    <span class="font-extrabold text-slate-700">${a.name}${a.hotel ? ' 🏨' : ''}</span>
+                                    <button onclick="window.sellAsset(${i})" class="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white font-extrabold rounded-lg hover:scale-105 active:scale-95 transition-all">
+                                        매각 (+${price}만)
+                                    </button>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        ${isShortageCleared ? `
+                            <button onclick="window.confirmLiquidationPayment()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all">
+                                지불 완료 및 정산
+                            </button>
+                        ` : ''}
+                        <button onclick="window.bankruptcyPlayerActive()" class="flex-1 py-4 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all">
+                            파산 (여행 포기)
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function confirmLiquidationPayment() {
+            const p = liquidationState.player;
+            const needed = liquidationState.needed;
+            const callback = liquidationState.callback;
+            if (!p || p.money < needed) return;
+
+            document.getElementById('popup-overlay').style.display = 'none';
+            liquidationState = { player: null, needed: 0, callback: null };
+            if (callback) callback(); 
+            updateUI(); 
+        }
+
+        function sellAsset(assetIdx) {
+            const p = liquidationState.player;
+            if (!p) return;
+
+            const asset = p.assets[assetIdx]; 
+            const totalCost = asset.price + (asset.hotel ? (asset.hotelCost || 20) : 0);
+            const price = Math.floor(totalCost * 0.8);
+            
+            p.money += price; 
+            p.assets.splice(assetIdx, 1); 
+            
+            const ownerBar = document.getElementById(`owner-bar-${asset.id}`);
+            if (ownerBar) ownerBar.style.backgroundColor = 'transparent'; 
+            
+            const hotelIcon = document.getElementById(`hotel-icon-${asset.id}`);
+            if (hotelIcon) hotelIcon.classList.add('hidden');
+            
+            log(`💰 ${p.name}님이 ${asset.name}을(를) 강제 처분하여 정산금에 가산했습니다! (+${price}만 위안)`, 'event'); 
+            playSound('money');
+            
+            renderLiquidationContent();
+            updateUI();
+        }
+
+        function bankruptcyPlayerActive() {
+            const p = liquidationState.player;
+            if (p) {
+                document.getElementById('popup-overlay').style.display = 'none';
+                bankruptcyPlayer(p);
+            }
+        }
+
+        function sellAssetActive(playerIdx, assetId) {
+            if (isRolling || isGameOver || airplaneMode) return;
+            const p = players[playerIdx];
+            const assetIndex = p.assets.findIndex(a => a.id === assetId);
+            if (assetIndex === -1) return;
+            const a = p.assets[assetIndex];
+            
+            const totalCost = a.price + (a.hotel ? (a.hotelCost || 20) : 0);
+            const refund = Math.floor(totalCost * 0.8);
+            
+            p.money += refund;
+            p.assets.splice(assetIndex, 1);
+            
+            const ownerBar = document.getElementById(`owner-bar-${a.id}`);
+            if (ownerBar) ownerBar.style.backgroundColor = 'transparent';
+            
+            const hotelIcon = document.getElementById(`hotel-icon-${a.id}`);
+            if (hotelIcon) hotelIcon.classList.add('hidden');
+            
+            log(`💰 ${p.name}님이 ${a.name}을(를) 총 투자비용의 80% 가격인 ${refund}만 위안에 판매했습니다.`, 'event');
+            playSound('money');
+            updateUI();
+            updateTokenPositions();
+        }
+
+        function bankruptcyPlayer(p) {
+            p.isBankrupt = true; p.money = 0; p.assets.forEach(a => {
+                const ownerBar = document.getElementById('owner-bar-' + a.id);
+                if (ownerBar) ownerBar.style.backgroundColor = 'transparent'; 
+                const hotelIcon = document.getElementById('hotel-icon-' + a.id);
+                if (hotelIcon) hotelIcon.classList.add('hidden'); 
+            });
+            p.assets = []; 
+            const token = document.getElementById('token-' + p.id); 
+            if (token) token.style.display = 'none';
+            document.getElementById('popup-overlay').style.display = 'none'; 
+            log(`💀 ${p.name}님이 끝내 파산하여 중국 대륙 여행에서 탈락했습니다.`, 'event'); 
+            playSound('land'); 
+            
+            checkGameOver();
+            if (!isGameOver) {
+                nextTurn();
+            }
+        }
+
+        function showFinalResults() {
+            playSound('applause');
+            isGameOver = true;
+            if (timerInterval) clearInterval(timerInterval);
+
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+
+            const results = players.map(pl => {
+                const landValue = pl.assets.reduce((sum, a) => sum + a.price, 0);
+                const hotelValue = pl.assets.reduce((sum, a) => sum + (a.hotel ? (a.hotelCost || 20) : 0), 0);
+                const total = pl.money + landValue + hotelValue;
+                return {
+                    name: pl.name,
+                    color: pl.color,
+                    money: pl.money,
+                    landValue: landValue,
+                    hotelValue: hotelValue,
+                    total: total,
+                    isBankrupt: pl.isBankrupt
+                };
+            });
+
+            results.sort((a, b) => b.total - a.total);
+            const winner = results[0];
+            
+            content.style.borderColor = winner.color;
+            
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-5xl my-4">👑🏆👑</div>
+                    <h2 class="text-3xl font-black mb-2 text-slate-800">중국 대륙 일주 종료!</h2>
+                    <p class="text-sm font-bold text-slate-500 mb-6">최종 자산 총합산 결과를 바탕으로 순위가 집계되었습니다.</p>
+                    
+                    <div class="bg-amber-50 border border-amber-200 p-5 rounded-2xl mb-6 text-center shadow-inner">
+                        <div class="text-xs text-amber-700 font-extrabold uppercase tracking-widest mb-1">🎉 대망의 최종 우승자 🎉</div>
+                        <div class="text-2xl font-black mb-1" style="color: ${winner.color}">${winner.name}</div>
+                        <div class="text-xl font-black text-slate-800">총 자산: ${winner.total.toLocaleString()}만 위안</div>
+                        <p class="text-xs text-slate-500 mt-2 italic">우승을 진심으로 축하합니다! 🥳🥂</p>
+                    </div>
+
+                    <div class="text-left mb-6">
+                        <div class="text-xs text-slate-400 font-bold mb-2 uppercase tracking-wider">최종 스코어보드</div>
+                        <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            ${results.map((r, idx) => `
+                                <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100 ${idx === 0 ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50'} text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-slate-400 text-sm w-4">${idx + 1}위</span>
+                                        <span class="font-extrabold" style="color: ${r.color}">${r.name}</span>
+                                        ${r.isBankrupt ? '<span class="px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded text-[0.6rem] font-bold">파산</span>' : ''}
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-black text-slate-800">${r.total.toLocaleString()}만 위안</div>
+                                        <div class="text-[0.65rem] text-slate-400">보유금 ${r.money}만 / 토지 ${r.landValue}만 / 호텔 ${r.hotelValue}만</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button onclick="window.resetGame()" class="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg transition-all text-base">
+                            새로운 게임하기
+                        </button>
+                        <button onclick="document.body.innerHTML='<div class=\\'flex h-screen w-screen items-center justify-center bg-slate-900 text-white text-2xl md:text-3xl font-black\\'>플레이해주셔서 감사합니다. 🐼</div>'" class="flex-1 py-4 bg-slate-800 hover:bg-slate-900 text-white font-black rounded-2xl shadow-lg transition-all text-base">
+                            그만하기
+                        </button>
+                    </div>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+            log(`⏹️ [게임 종료] 최종 집계 결과 1위는 ${winner.name}님입니다! 축하드립니다!`, 'event');
+        }
+
+        window.resetGame = function() {
+            document.getElementById('popup-overlay').style.display = 'none';
+            document.getElementById('main-layout-container').classList.remove('game-active');
+            document.getElementById('setup-screen').classList.remove('hidden');
+            document.getElementById('intro-overlay').classList.add('hidden');
+            
+            players = [];
+            currentPlayerIdx = 0;
+            isRolling = false;
+            isGameOver = false;
+            airplaneMode = false;
+            liquidationState = { player: null, needed: 0, callback: null };
+            allowBgm = true;
+            
+            if (timerInterval) clearInterval(timerInterval);
+            gameStartTime = null;
+            const timerEl = document.getElementById('game-timer');
+            if (timerEl) timerEl.innerText = '⏱️ 00:00';
+            
+            const logBox = document.getElementById('game-log');
+            if (logBox) logBox.innerHTML = '';
+            
+            const board = document.getElementById('board');
+            if (board) {
+                const tokens = board.querySelectorAll('.player-token');
+                tokens.forEach(t => t.remove());
+                
+                const owners = board.querySelectorAll('.cell-owner');
+                owners.forEach(o => o.style.backgroundColor = 'transparent');
+                
+                const hotels = board.querySelectorAll('[id^="hotel-icon-"]');
+                hotels.forEach(h => h.classList.add('hidden'));
+            }
+
+            for(let i=1; i<=4; i++) {
+                const list = document.getElementById(`p${i}-asset-list`);
+                if(list) list.innerHTML = '';
+                const panel = document.getElementById(`p${i}-assets`);
+                if(panel) panel.classList.add('hidden');
+            }
+            
+            window.updatePlayerInputs();
+        }
+
+        function checkGameOver() {
+            const activePlayers = players.filter(pl => !pl.isBankrupt);
+            if (activePlayers.length === 1) {
+                log(`📢 게임 종료! 최후의 승자는 ${activePlayers[0].name}님입니다!`, 'event');
+                showFinalResults();
+            }
+        }
+
+        function endGameManual() {
+            showFinalResults();
+        }
+
+        function showQuizPopup(p) {
+            playSound('money'); const overlay = document.getElementById('popup-overlay'); const content = document.getElementById('popup-content');
+            const quizzes = [
+                { q: "영화 '아바타'의 모티브가 된 장자제(장가계)가 위치하며 매운 샹차이(요리)가 유명한 성은 어디인가요?", a: ["쓰촨성", "후난성", "구이저우성"], r: 1 },
+                { q: "하늘에는 천당, 땅에는 항저우와 쑤저우가 있다고 불리는 강남 지역으로 동파육의 고향인 성은?", a: ["장쑤성", "저장성", "푸젠성"], r: 1 },
+                { q: "명·청 시대 황궁인 자금성과 만리장성 등 세계적인 문화유산이 자리한 곳은?", a: ["베이징", "상하이", "톈진"], r: 0 }
+            ];
+            const quiz = quizzes[Math.floor(Math.random() * quizzes.length)];
+            overlay.style.display = 'flex';
+            content.innerHTML = `
+                <div class="text-center"><h2 class="text-3xl font-black mb-8">❓ 중국 상식 퀴즈</h2>
+                    <p class="text-xl font-bold mb-10 text-slate-700">${quiz.q}</p>
+                    <div class="space-y-3">
+                        ${quiz.a.map((ans, i) => `<button onclick="window.checkQuiz(${i === quiz.r})" class="w-full py-5 bg-gray-50 hover:bg-emerald-50 border-2 border-gray-100 hover:border-emerald-500 rounded-3xl font-bold transition-all text-lg">${ans}</button>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function checkQuiz(correct) {
+            const p = players[currentPlayerIdx];
+            document.getElementById('popup-overlay').style.display = 'none';
+            if (correct) { 
+                p.money += 30; 
+                log("✅ 퀴즈 정답! 대륙 상식 포상금 30만 위안 수령.", 'event'); 
+                playSound('applause'); 
+                showQuizResultPopup(p, true, 30);
+            } else { 
+                log("❌ 오답! 박물관 역사 탐방 입장료 10만 위안 청구.", 'event'); 
+                playSound('mock'); 
+                
+                if (p.money < 10) {
+                    handleLiquidation(p, 10, () => {
+                        p.money -= 10;
+                        showQuizResultPopup(p, false, 10);
+                    });
+                } else {
+                    p.money -= 10;
+                    showQuizResultPopup(p, false, 10);
+                }
+            }
+        }
+
+        function showQuizResultPopup(p, correct, amount) {
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            
+            content.style.borderColor = correct ? '#10b981' : '#ef4444';
+            
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-5xl my-4">${correct ? '🎉' : '😢'}</div>
+                    <h2 class="text-2xl font-black mb-3 ${correct ? 'text-emerald-600' : 'text-rose-600'}">
+                        ${correct ? '정답입니다!' : '오답입니다!'}
+                    </h2>
+                    <p class="text-xs md:text-sm font-bold text-slate-600 mb-6 leading-relaxed">
+                        ${correct ? '대륙 상식 포상금이 지급되었습니다.' : '박물관 역사 탐방 입장료가 청구되었습니다.'}
+                    </p>
+                    <div class="mb-8">
+                        <span class="text-sm font-bold text-slate-500">결과 정산:</span>
+                        <span class="text-xl font-black ${correct ? 'text-emerald-600' : 'text-rose-600'}">
+                            ${correct ? '+' : '-'}${amount}만 위안
+                        </span>
+                    </div>
+                    
+                    <button onclick="window.confirmQuizResult()" class="w-full py-4 ${correct ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} text-white font-black rounded-2xl shadow-lg text-base">
+                        ${correct ? '포상금 수령' : '벌금 지불'}
+                    </button>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        window.confirmQuizResult = function() {
+            document.getElementById('popup-overlay').style.display = 'none';
+            updateUI();
+            nextTurn();
+        }
+
+        function handleBonus(p) {
+            const spot = BOARD_DATA[p.pos];
+            const evs = [
+                { t: "행운", m: 20, d: "여행 도중 기이한 천연 약용 버섯을 발견하여 근방 전통 시장에 처분했습니다! +20만 위안" }, 
+                { t: "벌금", m: -20, d: "유적지 구역에서 전동 킥보드 안전장비 미착용 및 고속 주행 단속 범칙금이 청구되었습니다. -20만 위안" }, 
+                { t: "지원", m: 15, d: "친절한 현지 소수민족 연대 주민들의 무상 환대로 가이딩 및 숙식 여비를 아꼈습니다! +15만 위안" }, 
+                { t: "당첨", m: 20, d: "지역 문화 보존 축제 리조트 복권 퀴즈 이벤트에 최종 당첨되었습니다! +20만 위안" },
+                { t: "분실", m: -10, d: "붐비는 명물 푸드 야시장에서 길을 재촉하다 비상용 현금 파우치를 도난 분실했습니다. -10만 위안" },
+                { t: "보상", m: 10, d: "관광 안내 자문 위원회 우수 여행 블로거 공모전에 은상을 수상하였습니다. +10만 위안" }
+            ];
+            const e = evs[Math.floor(Math.random() * evs.length)];
+            showBonusPopup(p, spot, e);
+        }
+
+        function showBonusPopup(p, spot, e) {
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            
+            if (e.m > 0) {
+                playSound('applause');
+                content.style.borderColor = '#10b981';
+            } else {
+                playSound('mock');
+                content.style.borderColor = '#ef4444';
+            }
+
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="mb-5">${getPopupTitle(spot)}</div>
+                    <h2 class="text-2xl font-black mb-3 ${e.m > 0 ? 'text-emerald-600' : 'text-rose-600'}">${e.t} 혜택 발생!</h2>
+                    <div class="bg-gray-50 p-5 rounded-3xl mb-6 text-[0.98rem] md:text-[1.05rem] font-medium text-slate-700 leading-relaxed text-left border border-slate-100">${e.d}</div>
+                    <div class="mb-6">
+                        <span class="text-sm font-bold text-slate-500">정산 변화:</span>
+                        <span class="text-xl font-black ${e.m > 0 ? 'text-emerald-600' : 'text-rose-600'}">
+                            ${e.m > 0 ? '+' : ''}${e.m}만 위안
+                        </span>
+                    </div>
+                    <button onclick="window.confirmBonus(${e.m}, '${e.d}')" class="w-full py-4 ${e.m > 0 ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} text-white font-black rounded-2xl shadow-lg text-base">정산 승인 및 차례 교대</button>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        function confirmBonus(moneyChange, descText) {
+            const p = players[currentPlayerIdx];
+            if (moneyChange < 0) {
+                const penalty = Math.abs(moneyChange);
+                if (p.money < penalty) {
+                    document.getElementById('popup-overlay').style.display = 'none';
+                    handleLiquidation(p, penalty, () => {
+                        p.money -= penalty;
+                        log(`🎰 [보너스 벌금 정산] 지불 완료.`, 'event');
+                        updateUI();
+                        nextTurn();
+                    });
+                    return;
+                }
+            }
+            p.money += moneyChange;
+            log("🎰 [보너스 정산] " + descText, 'event');
+            document.getElementById('popup-overlay').style.display = 'none';
+            updateUI();
+            nextTurn();
+        }
+
+        function handleGoldenKey(p) {
+            const spot = BOARD_DATA[p.pos];
+            const goldenKeyQuizzes = [
+                { q: "톈산산맥과 타클라마칸 사막의 장엄한 자연경관을 자랑하며, 양꼬치와 난(Naan) 같은 전통 미식이 유명한 자치구는?", a: ["신장 자치구", "네이멍구 자치구", "시짱 자치구"], r: 0, region: "신장" },
+                { q: "청나라 황실의 여름 피서지였던 청더 피서산장과 만리장성의 동쪽 끝 관문인 산하이관이 위치한 성은?", a: ["허난성", "허베이성", "산둥성"], r: 1, region: "허베이성" },
+                { q: "밀가루 반죽을 칼로 깎아 만드는 전통 면 요리인 도삭면의 본고장이자 핑야오 고성이 있는 지역은?", a: ["산시(陝西)성", "산시(山西)성", "안후이성"], r: 1, region: "산시(山西)성" },
+                { q: "해안 도시 다롄의 이국적인 풍경과 선양 고궁의 웅장함을 동시에 만끽할 수 있는 동북 3성의 관문 지역은?", a: ["랴오닝성", "지린성", "헤이룽장성"], r: 0, region: "랴오닝성" },
+                { q: "이탈리아 풍경구 등 근대 서양식 건축물이 잘 보존되어 있으며 육즙이 풍부한 구불리 빠오즈(만두)가 유명한 직할시는?", a: ["상하이", "충칭", "톈진"], r: 2, region: "톈진" },
+                { q: "매년 환상적인 국제 빙등 축제가 열리며 비잔틴 양식의 성 소피아 성당과 꿔바로우 요리의 발상지인 지역은?", a: ["지린성", "랴오닝성", "헤이룽장성"], r: 2, region: "헤이룽장성" },
+                { q: "유목 민족의 전통 가옥인 게르 체험과 신선한 양고기 구이, 수테차(전통 밀크티)가 대표적인 문화인 자치구는?", a: ["시짱 자치구", "네이멍구 자치구", "광시 자치구"], r: 1, region: "네이멍구" },
+                { q: "한반도와 국경을 접하고 있으며 민족의 영산인 백두산 천지와 고구려 유적들이 즐비한 성은?", a: ["지린성", "랴오닝성", "헤이룽장성"], r: 0, region: "지린성" },
+                { q: "항저우 서호의 수려한 경관과 함께 최고급 녹차인 서호 용정차의 발상지이며 동파육의 고향인 성은?", a: ["저장성", "장쑤성", "안후이성"], r: 0, region: "저장성" },
+                { q: "수묵화 같은 풍경을 자랑하는 황산이 있으며, 특유의 흰 벽과 검은 기와를 얹은 휘파 건축 양식의 고촌락(홍춘)이 유명한 곳은?", a: ["장시성", "안후이성", "허난성"], r: 1, region: "안후이성" },
+                { q: "쑤저우의 졸정원 등 유네스코에 등재된 정교한 전통 정원들이 즐비하며 달콤하고 부드러운 민물고기 요리가 유명한 성은?", a: ["장쑤성", "저장성", "푸젠성"], r: 0, region: "장쑤성" },
+                { q: "황푸강을 사이에 두고 와이탄의 근대 유럽식 건축물과 푸둥의 미래지향적 마천루가 대비를 이루는 곳은?", a: ["베이징", "상하이", "톈진"], r: 1, region: "상하이" },
+                { q: "중국 황실에 바쳐지던 청화백자의 생산지 경덕진이 있으며 이백의 시에 등장하는 루산 폭포가 유명한 성은?", a: ["장시성", "안후이성", "후베이성"], r: 0, region: "장시성" },
+                { q: "황하 문명이 태동한 중원 지역으로 중국 무술의 산실인 쑹산 소림사와 뤄양 룽먼석굴이 자리하고 있는 곳은?", a: ["허난성", "산둥성", "산시(陝西)성"], r: 0, region: "허난성" },
+                { q: "공자와 맹자가 태어난 유교 사상의 발상지로 중국 오악 중 으뜸인 태산과 칭다오 맥주가 유명한 성은?", a: ["허난성", "산둥성", "후난성"], r: 1, region: "산둥성" },
+                { q: "양쯔강이 관통하며 우한의 랜드마크인 황학루에서 바라보는 강변 풍경이 수려하고 민물고기 요리가 대표적인 성은?", a: ["후베이성", "후난성", "광둥성"], r: 0, region: "후베이성" },
+                { q: "영화 '아바타'의 모티브가 된 기암괴석의 숲 장자제의 자연경관을 품고 있으며 매운 샹차이가 유명한 성은?", a: ["후난성", "구이저우성", "윈난성"], r: 0, region: "후난성" },
+                { q: "수백 가지에 달하는 딤섬과 얌차(차를 마시는 문화)로 대표되며 광저우 타워의 마천루 레이저 조명이 유명한 곳은?", a: ["광둥성", "하이난성", "광시 자치구"], r: 0, region: "광둥성" },
+                { q: "동양의 하와이라 불리는 중국 최남단의 열대 섬으로 신선한 해산물 요리와 하이난 닭고기 덮밥이 유명한 곳은?", a: ["하이난성", "푸젠성", "타이완성"], r: 0, region: "하이난성" },
+                { q: "구이린(계림) 산수의 수려한 지형과 리강의 풍경이 중국 화폐 20위안의 배경지이며 뤄쓰펀이 명물인 자치구는?", a: ["시짱 자치구", "닝샤 자치구", "광시 자치구"], r: 2, region: "광시" },
+                { q: "아시아 최대 규모인 황궈수 폭포가 웅장하게 쏟아지는 산악 지대이자 중국 최고의 명주 마오타이주의 고향은?", a: ["구이저우성", "윈난성", "쓰촨성"], r: 0, region: "구이저우성" },
+                { q: "차마고도의 출발점이자 보이차의 발원지로 사계절 봄 같은 날씨의 쿤밍과 옥룡설산이 있는 고원 지역은?", a: ["시짱 자치구", "윈난성", "구이저우성"], r: 1, region: "윈난성" },
+                { q: "화자오(초피)를 사용하여 얼얼하고 매운맛을 내는 마파두부와 마라훠궈의 발상지이자 자이언트 판다의 서식지인 곳은?", a: ["쓰촨성", "충칭", "간쑤성"], r: 0, region: "쓰촨성" },
+                { q: "양쯔강과 자링강이 만나는 가파른 절벽 위에 세워진 산의 도시로 건물 사이를 관통하는 모노레일이 있는 직할시는?", a: ["베이징", "충칭", "상하이"], r: 1, region: "충칭" },
+                { q: "진시황릉을 호위하는 거대한 병마용갱과 양귀비의 화청지 등 압도적인 역사 유적이 가득한 성은?", a: ["산시(山西)성", "산시(陝西)성", "간쑤성"], r: 1, region: "산시(陝西)성" },
+                { q: "사막 한가운데 자리한 불교 예술의 보고 둔황 막고굴과 오아시스인 월아천이 위치해 있습니다. 무지개 빛깔의 지층이 경이로운 장예 단샤 지질공원(칠채산)의 풍광과 란저우 우육면이 유명합니다.", a: ["간쑤성", "칭하이성", "닝샤 자치구"], r: 0, region: "간쑤성" },
+                { q: "황하의 은혜를 받아 사막 속의 오아시스로 불리며 고대 서하 왕국의 피라미드 무덤군과 명품 구기자가 유명한 자치구는?", a: ["닝샤 자치구", "네이멍구 자치구", "신장 자치구"], r: 0, region: "닝샤" },
+                { q: "해발 3,000m 이상 고원에 위치하며 하늘을 거울처럼 비추는 중국 최대의 소금 호수가 있는 지역은?", a: ["칭하이성", "시짱 자치구", "구이저우성"], r: 0, region: "칭하이성" },
+                { q: "라싸에 우뚝 솟은 티베트 불교의 성지 포탈라궁이 있으며 세계의 지붕이라 불리는 곳은?", a: ["시짱 자치구", "신장 자치구", "네이멍구 자치구"], r: 0, region: "시짱" },
+                { q: "수백 명이 함께 생활할 수 있도록 흙으로 둥글게 지은 고대 방어형 전통 가옥 투루(토루)가 있으며 우롱차의 산지인 곳은?", a: ["푸젠성", "광둥성", "장쑤성"], r: 0, region: "푸젠성" }
+            ];
+            
+            const quiz = goldenKeyQuizzes[Math.floor(Math.random() * goldenKeyQuizzes.length)];
+            
+            const amounts = [10, 15, 20];
+            const m = amounts[Math.floor(Math.random() * amounts.length)];
+            
+            showGoldenKeyQuizPopup(p, spot, quiz, m);
+        }
+
+        function showGoldenKeyQuizPopup(p, spot, quiz, amount) {
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            
+            content.style.borderColor = '#eab308'; 
+            
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-[0.65rem] font-black text-amber-500 tracking-[0.2em] mb-2 uppercase">[ 황금열쇠 상식 퀴즈 ]</div>
+                    <div class="text-5xl my-3">🔑</div>
+                    <div class="text-xs font-bold text-blue-600 mb-3 tracking-wide">지역 카드 정보 찾기 챌린지!</div>
+                    <div class="bg-amber-50 border border-amber-200 p-3 rounded-2xl mb-4 text-center">
+                        <div class="text-[0.68rem] text-amber-700 font-extrabold uppercase tracking-widest mb-0.5">상금 찬스 안내</div>
+                        <div class="text-slate-800 font-black text-xs md:text-sm">
+                            정답 시 <span class="text-emerald-600 font-black text-sm md:text-base">+${amount}만 위안</span> 수령!
+                        </div>
+                    </div>
+                    <p class="text-[1.02rem] md:text-lg font-black mb-6 text-slate-800 leading-relaxed text-left bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-24 overflow-y-auto">${quiz.q}</p>
+                    <div class="space-y-2 mb-4">
+                        ${quiz.a.map((ans, i) => `
+                            <button onclick="window.checkGoldenKeyQuiz(${i === quiz.r}, ${amount}, '${quiz.region}')" class="w-full py-3 bg-gray-50 hover:bg-amber-50 border-2 border-gray-100 hover:border-amber-500 rounded-2xl font-bold transition-all text-xs md:text-sm text-slate-700">
+                                ${ans}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <span class="text-[0.68rem] font-bold text-slate-400">※ 오답 시 일괄 역사 유적 보수 기부금 <span class="text-rose-600 font-extrabold">-5만 위안</span> 차감</span>
+                    </div>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        window.checkGoldenKeyQuiz = function(correct, amount, regionName) {
+            const p = players[currentPlayerIdx];
+            if (correct) {
+                playSound('applause');
+                p.money += amount;
+                log(`🔑 [황금열쇠 퀴즈] ${p.name}님이 정답을 맞혀 대륙 역사 탐사 포상금 ${amount}만 위안을 획득했습니다! (출제지: ${regionName})`, 'event');
+                showGoldenKeyResultPopup(p, true, amount, regionName, false);
+            } else {
+                playSound('mock');
+                const penalty = 5; 
+                log(`🔑 [황금열쇠 퀴즈] ${p.name}님이 오답으로 인해 기부금 ${penalty}만 위안을 지출했습니다. (출제지: ${regionName})`, 'event');
+                
+                if (p.money < penalty) {
+                    handleLiquidation(p, penalty, () => {
+                        p.money -= penalty;
+                        showGoldenKeyResultPopup(p, false, penalty, regionName, false);
+                    });
+                } else {
+                    p.money -= penalty;
+                    showGoldenKeyResultPopup(p, false, penalty, regionName, false);
+                }
+            }
+        }
+
+        function showGoldenKeyResultPopup(p, correct, amount, regionName, needsLiquidation = false) {
+            const overlay = document.getElementById('popup-overlay');
+            const content = document.getElementById('popup-content');
+            
+            content.style.borderColor = correct ? '#10b981' : '#ef4444';
+            
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-5xl my-4">${correct ? '🎉' : '😢'}</div>
+                    <h2 class="text-2xl font-black mb-3 ${correct ? 'text-emerald-600' : 'text-rose-600'}">
+                        ${correct ? '정답입니다!' : '오답입니다!'}
+                    </h2>
+                    <p class="text-xs md:text-sm font-bold text-slate-600 mb-6 leading-relaxed">
+                        이 문제는 <span class="text-slate-800 font-extrabold">[ ${regionName} ]</span> 카드의 고유 지리·문화·역사 상세 정규 정보를 근간으로 고안되었습니다.
+                    </p>
+                    <div class="mb-8">
+                        <span class="text-sm font-bold text-slate-500">결과 정산:</span>
+                        <span class="text-xl font-black ${correct ? 'text-emerald-600' : 'text-rose-600'}">
+                            ${correct ? '+' : '-'}${amount}만 위안
+                        </span>
+                    </div>
+                    
+                    <button onclick="window.confirmGoldenKeyResult(${needsLiquidation})" class="w-full py-4 ${correct ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} text-white font-black rounded-2xl shadow-lg text-base">
+                        ${needsLiquidation ? '자산 매각하러 가기' : '확인 및 다음 턴'}
+                    </button>
+                </div>
+            `;
+            overlay.style.display = 'flex';
+        }
+
+        window.confirmGoldenKeyResult = function(needsLiquidation) {
+            document.getElementById('popup-overlay').style.display = 'none';
+            updateUI();
+            nextTurn();
+        }
+
+        window.toggleSidebar = function(side) {
+            console.log("Sidebars are permanently fixed on this layout.");
+        };
+
+        window.updatePlayerInputs = updatePlayerInputs;
+        window.showIntro = showIntro;
+        window.launchGame = launchGame;
+        window.sellAssetActive = sellAssetActive;
+        window.sellAsset = sellAsset;
+        window.confirmPurchase = confirmPurchase;
+        window.confirmBuild = confirmBuild;
+        window.confirmAirplanePurchase = confirmAirplanePurchase;
+        window.bankruptcyPlayer = bankruptcyPlayer;
+        window.checkGameOver = checkGameOver;
+        window.checkQuiz = checkQuiz;
+        window.handleBonus = handleBonus;
+        window.showBonusPopup = showBonusPopup;
+        window.confirmBonus = confirmBonus;
+        window.handleRollDice = handleRollDice;
+        window.checkGoldenKeyQuiz = checkGoldenKeyQuiz;
+        window.confirmGoldenKeyResult = confirmGoldenKeyResult;
+        window.confirmQuizResult = confirmQuizResult;
+        window.bankruptcyPlayerActive = bankruptcyPlayerActive;
+        window.onCellClick = onCellClick;
+        window.endGameManual = endGameManual;
+        window.confirmLiquidationPayment = confirmLiquidationPayment;
+        window.executePayment = executePayment;
+        window.executeAirplanePayment = executeAirplanePayment;
+        window.resetGame = resetGame;
+        window.initBGM = initBGM;
+        window.showLandInfo = showLandInfo;
+        window.closeLandInfo = closeLandInfo;
+        window.backToSetupFromInfo = backToSetupFromInfo;
+        window.closeSurveyPopup = closeSurveyPopup;
+
+        window.onload = function() { window.updatePlayerInputs(); };
+    </script>
+</body>
+</html>
